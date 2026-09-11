@@ -1,0 +1,45 @@
+{
+  "name": "labtool-v3",
+  "version": "0.2.0",
+  "description": "LabTool V3 - Inertial Navigation Lab Serial Data Acquisition Software (Electron + React + TS)",
+  "main": "out/main/index.js",
+  "author": "TMRNic",
+  "license": "GPL-3.0",
+  "private": true,
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview",
+    "pack": "npm run build && electron-builder --win --x64",
+    "pack:portable": "npm run build && electron-builder --win portable --x64",
+    "pack:nsis": "npm run build && electron-builder --win nsis --x64",
+    "typecheck:node": "tsc --noEmit -p tsconfig.node.json",
+    "typecheck:web": "tsc --noEmit -p tsconfig.web.json",
+    "typecheck": "npm run typecheck:node && npm run typecheck:web",
+    "rebuild": "electron-rebuild -f -w serialport",
+    "rebuild:npm": "npm rebuild --runtime=electron --target=31.7.7 --disturl=https://electronjs.org/headers --abi=125 --module-binary-store-mirror=https://npmmirror.com/mirrors/electron/ -w serialport"
+  },
+  "dependencies": {
+    "@electron-toolkit/preload": "^3.0.1",
+    "@electron-toolkit/utils": "^3.0.0",
+    "electron-store": "^8.2.0",
+    "serialport": "^12.0.0",
+    "zustand": "^4.5.4",
+    "uplot": "^1.6.30",
+    "nanoid": "^5.0.7"
+  },
+  "devDependencies": {
+    "@electron/rebuild": "^3.6.0",
+    "@types/node": "^20.14.0",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.1",
+    "electron": "^31.3.0",
+    "electron-builder": "^26.15.3",
+    "electron-vite": "^2.3.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "typescript": "^5.4.5",
+    "vite": "^5.3.3"
+  }
+}

@@ -1,0 +1,66 @@
+.gnss-display {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.gd-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: var(--bg-elev);
+  border-bottom: 1px solid var(--border);
+}
+.gd-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+.gd-count {
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-family: 'Consolas', monospace;
+}
+
+.gd-lcd-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  padding: 10px;
+}
+
+.gd-lcd {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 8px 10px;
+  background: linear-gradient(180deg, #0a1a0a, #14241a);
+  border: 1px solid #1e3a1e;
+  border-radius: 3px;
+  box-shadow: inset 0 0 8px rgba(74, 222, 128, 0.15);
+  font-family: 'Consolas', 'DSEG7-Classic', monospace;
+}
+.gd-lcd-label {
+  font-size: 11px;
+  color: #6fa86f;
+  min-width: 70px;
+}
+.gd-lcd-value {
+  flex: 1;
+  font-size: 14px;
+  color: #6fff8c;
+  text-shadow: 0 0 6px rgba(74, 222, 128, 0.6);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.gd-lcd-unit {
+  font-size: 10px;
+  color: #4a7e4a;
+  min-width: 28px;
+  text-align: right;
+}

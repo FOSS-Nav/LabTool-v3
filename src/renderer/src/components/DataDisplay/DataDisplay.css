@@ -1,0 +1,67 @@
+.data-display {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.dd-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: var(--bg-elev);
+  border-bottom: 1px solid var(--border);
+}
+.dd-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+.dd-counter {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-family: 'Consolas', monospace;
+}
+
+.dd-table-wrap {
+  flex: 1;
+  overflow: auto;
+}
+.dd-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.dd-table thead th {
+  position: sticky;
+  top: 0;
+  background: var(--bg-elev);
+  color: var(--text-secondary);
+  font-weight: 500;
+  padding: 6px 8px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+.dd-table tbody tr:nth-child(even) { background: rgba(255, 255, 255, 0.02); }
+.dd-table tbody tr:hover { background: rgba(74, 158, 255, 0.08); }
+.dd-table td {
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--border);
+}
+.dd-name {
+  font-family: 'Consolas', monospace;
+  color: var(--accent);
+}
+.dd-type {
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+.dd-value {
+  font-family: 'Consolas', monospace;
+  color: var(--success);
+  text-align: right;
+}

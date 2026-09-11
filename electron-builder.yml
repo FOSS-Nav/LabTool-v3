@@ -1,0 +1,47 @@
+appId: com.labtool.v3
+productName: LabTool-V3
+copyright: Copyright (c) 2024 TMRNic
+
+directories:
+  output: dist                          # 打包产物目录
+  buildResources: build                 # 图标等资源目录
+
+files:
+  - "out/**/*"                          # electron-vite 产物（主/preload/renderer）
+  - "package.json"
+  - "!**/.git"
+  - "!**/node_modules/*/{CHANGELOG.md,README.md,readme.md,test,__tests__,tests,powered-test,example,examples}"
+  - "!**/node_modules/*.d.ts"
+  - "!**/node_modules/.bin"
+  - "!**/*.{iml,o,hprof,orig,pyc,pyo,rbc,swp,csproj,.sln,.suo,xproj,ccproj,lsproj,user,userprefs,pidb,.DS_Store,thumbs.db}"
+  - "!**/{.editorconfig,.eslintrc,.flowconfig,.jshintrc,.npmignore,.travis.yml,yarn.lock,yarn-error.log,.nyc_output}"
+  - "!**/{__tests__,test,__mocks__}"
+  - "!**/{.yarn,.yarn-cache,.idea,.vscode,.git,.github,docs}"
+  - "!**/{appveyor.yml,.travis.yml,circle.yml}"
+  - "!**/{npm-debug.log,yarn.lock,.yarn-integrity}"
+
+asar: true                              # 启用 asar 压缩（默认）
+
+win:
+  icon: build/icon.png
+  target:
+    - target: portable
+      arch:
+        - x64
+    - target: nsis
+      arch:
+        - x64
+  artifactName: ${productName}-${version}-${arch}.${ext}
+
+portable:
+  artifactName: ${productName}-${version}-portable.${ext}
+
+nsis:
+  oneClick: false                       # 不静默安装
+  perMachine: false                     # 用户级安装（无需管理员）
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: LabTool-V3
+  uninstallDisplayName: LabTool-V3
+  artifactName: ${productName}-${version}-setup.${ext}

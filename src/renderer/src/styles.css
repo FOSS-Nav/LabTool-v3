@@ -1,0 +1,206 @@
+/* LabTool-V3 全局样式 —— 双主题 (深色默认 / 浅色备选) + 现代布局 */
+
+/* ============================================================
+ * 深色主题（默认）
+ * ============================================================ */
+:root,
+:root[data-theme='dark'],
+:root[data-theme='system'][data-resolved-theme='dark'] {
+  --bg-primary: #1a1d24;
+  --bg-secondary: #252a33;
+  --bg-card: #2d3340;
+  --bg-elev: #353b48;
+  --text-primary: #e4e6eb;
+  --text-secondary: #9ba1ad;
+  --accent: #4a9eff;
+  --accent-hover: #3a8eef;
+  --border: #3a4150;
+  --border-strong: #4a5160;
+  --success: #4ade80;
+  --warn: #fbbf24;
+  --danger: #e74c3c;
+
+  /* 派生色 */
+  --shadow-card: 0 4px 12px rgba(0, 0, 0, 0.35);
+  --led-off: #4b5563;
+  --row-alt: rgba(255, 255, 255, 0.025);
+  --row-hover: rgba(74, 158, 255, 0.10);
+  --header-gradient: linear-gradient(180deg, #0a1a0a, #14241a);
+  --lcd-text: #6fff8c;
+  --lcd-label: #6fa86f;
+  --lcd-border: #1e3a1e;
+  --lcd-unit: #4a7e4a;
+
+  color-scheme: dark;
+}
+
+/* ============================================================
+ * 浅色主题
+ * ============================================================ */
+:root[data-theme='light'],
+:root[data-theme='system'][data-resolved-theme='light'] {
+  --bg-primary: #f5f6f8;
+  --bg-secondary: #ffffff;
+  --bg-card: #ffffff;
+  --bg-elev: #eef0f4;
+  --text-primary: #1a1d24;
+  --text-secondary: #6b7280;
+  --accent: #2563eb;
+  --accent-hover: #1d4ed8;
+  --border: #e5e7eb;
+  --border-strong: #cbd1d9;
+  --success: #16a34a;
+  --warn: #d97706;
+  --danger: #dc2626;
+
+  --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.08);
+  --led-off: #cbd1d9;
+  --row-alt: rgba(0, 0, 0, 0.025);
+  --row-hover: rgba(37, 99, 235, 0.07);
+  --header-gradient: linear-gradient(180deg, #f0fdf4, #dcfce7);
+  --lcd-text: #15803d;
+  --lcd-label: #16a34a;
+  --lcd-border: #bbf7d0;
+  --lcd-unit: #4ade80;
+
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei',
+    'PingFang TC', 'Helvetica Neue', sans-serif;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+  transition: background 0.2s, color 0.2s;
+}
+
+input, select, textarea, button {
+  font-family: inherit;
+  outline: none;
+}
+
+input, select, textarea {
+  user-select: text;
+}
+
+/* ============================================================
+ * 应用骨架
+ * ============================================================ */
+.app-root {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  height: 100vh;
+  width: 100vw;
+}
+
+/* ============================================================
+ * uPlot 主题适配
+ * ============================================================ */
+.uplot,
+.u-wrap,
+.u-over,
+.u-under {
+  background: transparent !important;
+}
+.u-legend {
+  background: transparent !important;
+  color: var(--text-secondary) !important;
+  font-size: 11px !important;
+}
+.u-legend .u-marker {
+  border-radius: 0 !important;
+}
+.u-cursor-x, .u-cursor-y {
+  border-color: rgba(155, 161, 173, 0.4) !important;
+}
+.u-select {
+  background: rgba(74, 158, 255, 0.15) !important;
+}
+
+/* ============================================================
+ * 滚动条
+ * ============================================================ */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: var(--bg-primary); }
+::-webkit-scrollbar-thumb { background: var(--bg-elev); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--border-strong); }
+
+/* ============================================================
+ * 公共按钮 / 输入控件
+ * ============================================================ */
+.btn {
+  background: var(--bg-elev);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  padding: 4px 12px;
+  border-radius: 3px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.btn:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.btn-primary {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+}
+.btn-primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+  color: white;
+}
+.btn-danger {
+  background: var(--danger);
+  color: white;
+  border-color: var(--danger);
+}
+.btn-danger:hover:not(:disabled) {
+  background: #c0392b;
+  border-color: #c0392b;
+}
+
+.input,
+.select {
+  background: var(--bg-elev);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  padding: 4px 8px;
+  border-radius: 3px;
+  font-size: 12px;
+  transition: border-color 0.15s;
+}
+.input:focus,
+.select:focus {
+  border-color: var(--accent);
+}
+.input:disabled,
+.select:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* card */
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: var(--shadow-card);
+}

@@ -1,0 +1,29 @@
+.gnss-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+}
+
+.gp-active-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  background: var(--bg-elev);
+  border-radius: 3px;
+}
+.gp-active {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+.gp-active input { accent-color: var(--accent); cursor: pointer; }
+.gp-hint {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-left: auto;
+}
