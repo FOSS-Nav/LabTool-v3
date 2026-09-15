@@ -1,12 +1,18 @@
 /**
  * LabTool-V3 GNSS 串口面板
- * 对应 V2 ui->setPort_combox_g + checkBox_active_gnss + meas_combox_g
+ * 对应 V2 ui->setPort_combox_g + checkBox_active_gnss
+ *
+ * 改动：
+ *   - 量测类型单选 → 位置报文 + 速度报文 两个独立 combobox（GPGGA/GNGGA 兼容；
+ *     GPVTG/GNVTG 兼容；NovAtel 的 BESTPOS / BESTVEL 也支持）
+ *   - 在打开按键下方增加实时数据表（GnssDataTable）
  */
 
 import { useEffect, useState } from 'react'
 import { useStore } from '../../store'
-import { SerialConfig, SerialStatus, GnssMeasType } from '@shared'
+import { GnssPosMsg, GnssVelMsg, SerialConfig, SerialStatus } from '@shared'
 import { useT } from '../../i18n'
+import { GnssDataTable } from './GnssDataTable'
 import './GnssPortPanel.css'
 
 const BAUDS = ['4800', '9600', '19200', '38400', '57600', '115200']
@@ -24,7 +30,8 @@ export function GnssPortPanel({ onError }: Props): JSX.Element {
   const imu = useStore((s) => s.imu)
   const setGnssConfig = useStore((s) => s.setGnssConfig)
   const setGnssActive = useStore((s) => s.setGnssActive)
-  const setGnssMeasType = useStore((s) => s.setGnssMeasType)
+  const setGnssPosMsg = useStore((s) => s.setGnssPosMsg)
+  const setGnssVelMsg = useStore((s) => s.setGnssVelMsg)
   const setAvailablePorts = useStore((s) => s.setAvailablePorts)
 
   const [localCfg, setLocalCfg] = useState<SerialConfig>({
@@ -52,6 +59,7 @@ export function GnssPortPanel({ onError }: Props): JSX.Element {
   async function handleToggle(): Promise<void> {
     try {
       if (!isOpen) {
+        if (!gnss.active) setGnssActive(true)
         setGnssConfig(localCfg)
         const r = await window.labtool.openGNSS(localCfg)
         if (!r.ok) {
@@ -103,6 +111,14 @@ export function GnssPortPanel({ onError }: Props): JSX.Element {
             ))
           )}
         </select>
+        <button
+          className="sp-refresh"
+          onClick={() => void refreshPorts()}
+          disabled={isOpen}
+          title={t('serial.refreshPorts')}
+        >
+          ↻
+        </button>
       </div>
 
       <div className="sp-row">
@@ -114,6 +130,15 @@ export function GnssPortPanel({ onError }: Props): JSX.Element {
           onChange={(e) => setLocalCfg((c) => ({ ...c, baudRate: Number(e.target.value) }))}
         >
           {BAUDS.map((b) => <option key={b} value={b}>{b}</option>)}
+        </select>
+        <label className="sp-label sp-label-small">{t('serial.stopBits')}</label>
+        <select
+          className="sp-select sp-select-small"
+          value={localCfg.stopBits}
+          disabled={isOpen}
+          onChange={(e) => setLocalCfg((c) => ({ ...c, stopBits: Number(e.target.value) as 1 | 2 | 3 }))}
+        >
+          {STOP_BITS.map((b) => <option key={b} value={b}>{b}</option>)}
         </select>
       </div>
 
@@ -127,12 +152,9 @@ export function GnssPortPanel({ onError }: Props): JSX.Element {
         >
           {DATA_BITS.map((b) => <option key={b} value={b}>{b}</option>)}
         </select>
-      </div>
-
-      <div className="sp-row">
-        <label className="sp-label">{t('serial.parity')}</label>
+        <label className="sp-label sp-label-small">{t('serial.parity')}</label>
         <select
-          className="sp-select"
+          className="sp-select sp-select-small"
           value={localCfg.parity}
           disabled={isOpen}
           onChange={(e) => setLocalCfg((c) => ({ ...c, parity: Number(e.target.value) as 0 | 2 | 3 }))}
@@ -145,28 +167,32 @@ export function GnssPortPanel({ onError }: Props): JSX.Element {
         </select>
       </div>
 
-      <div className="sp-row">
-        <label className="sp-label">{t('serial.stopBits')}</label>
+      {/* ============================================================
+       * 位置报文 + 速度报文（4 个控件：标签+选择 × 2）
+       * ============================================================ */}
+      <div className="gp-msg-row">
+        <label className="gp-msg-label">{t('gnss.posMsg')}</label>
         <select
-          className="sp-select"
-          value={localCfg.stopBits}
+          className="gp-msg-select"
+          value={gnss.posMsg}
           disabled={isOpen}
-          onChange={(e) => setLocalCfg((c) => ({ ...c, stopBits: Number(e.target.value) as 1 | 2 | 3 }))}
+          title={t('gnss.posMsgHint')}
+          onChange={(e) => setGnssPosMsg(e.target.value as GnssPosMsg)}
         >
-          {STOP_BITS.map((b) => <option key={b} value={b}>{b}</option>)}
+          <option value={GnssPosMsg.GPGGA}>GPGGA</option>
+          <option value={GnssPosMsg.BESTPOS}>BESTPOS</option>
         </select>
-      </div>
 
-      <div className="sp-row">
-        <label className="sp-label">{t('gnss.measType')}</label>
+        <label className="gp-msg-label">{t('gnss.velMsg')}</label>
         <select
-          className="sp-select"
-          value={gnss.measType}
+          className="gp-msg-select"
+          value={gnss.velMsg}
           disabled={isOpen}
-          onChange={(e) => setGnssMeasType(Number(e.target.value))}
+          title={t('gnss.velMsgHint')}
+          onChange={(e) => setGnssVelMsg(e.target.value as GnssVelMsg)}
         >
-          <option value={GnssMeasType.VelPos}>{t('gnss.measType.velpos')}</option>
-          <option value={GnssMeasType.OnlyPos}>{t('gnss.measType.onlypos')}</option>
+          <option value={GnssVelMsg.GPVTG}>GPVTG</option>
+          <option value={GnssVelMsg.BESTVEL}>BESTVEL</option>
         </select>
       </div>
 
@@ -174,12 +200,14 @@ export function GnssPortPanel({ onError }: Props): JSX.Element {
         <div className={'sp-led ' + (isOpen ? 'on' : 'off')} />
         <button
           className={'sp-btn ' + (isOpen ? 'close' : 'open')}
-          disabled={!gnss.active}
           onClick={() => void handleToggle()}
         >
           {isOpen ? t('serial.close') + ' GNSS' : t('serial.open') + ' GNSS'}
         </button>
       </div>
+
+      {/* 实时数据表（在打开按钮下方） */}
+      <GnssDataTable />
 
       {gnss.error && <div className="sp-error">⚠ {gnss.error}</div>}
     </div>

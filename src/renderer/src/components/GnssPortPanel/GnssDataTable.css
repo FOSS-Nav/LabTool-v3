@@ -1,0 +1,91 @@
+.gnss-data-table {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  overflow: hidden;
+  margin-top: 4px;
+}
+
+.gdt-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  background: var(--bg-elev);
+  border-bottom: 1px solid var(--border);
+}
+.gdt-title {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+.gdt-tags {
+  display: flex;
+  gap: 4px;
+}
+.gdt-tag {
+  font-size: 10px;
+  font-family: Consolas, monospace;
+  padding: 1px 5px;
+  border-radius: 3px;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  background: var(--bg-primary);
+}
+.gdt-tag.nmea {
+  color: #6fa86f;
+  border-color: #1e3a1e;
+  background: rgba(111, 168, 111, 0.12);
+}
+.gdt-tag.nov {
+  color: #4a9eff;
+  border-color: #1e3a5e;
+  background: rgba(74, 158, 255, 0.12);
+}
+
+.gdt-body {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 1px;
+  background: var(--border);
+}
+:root[data-theme='light'] .gdt-body {
+  background: var(--border);
+}
+
+.gdt-section {
+  background: var(--bg-card);
+  padding: 6px 8px;
+}
+.gdt-section-title {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  letter-spacing: 0.04em;
+  margin-bottom: 4px;
+  text-transform: uppercase;
+}
+
+.gdt-tbl {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: Consolas, monospace;
+  font-size: 11px;
+  table-layout: fixed;
+}
+.gdt-tbl td {
+  padding: 2px 4px;
+  vertical-align: middle;
+}
+.gdt-k {
+  color: var(--text-secondary);
+  width: 56%;
+  font-size: 10px;
+}
+.gdt-v {
+  color: var(--text-primary);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  width: 44%;
+  font-size: 11px;
+}

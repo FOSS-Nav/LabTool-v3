@@ -5,22 +5,22 @@
  * 它负责：
  *   - 订阅 IPC 事件 → 更新 store
  *   - 启动时拉取一次串口列表
- *   - 切换 GNSS 量测类型时通知主进程
+ *   - 切换 GNSS 位置/速度报文类型时通知主进程
+ *   - GNSS 关闭时清空渲染端的 GNSS 衍生状态（轨迹、详情等）
+ *
+ * 注：GNSS 本地投影（east/north）的原点锁定现在统一在主进程的
+ *     SerialManager 里维护，渲染端只把主进程算好的 east/north 推入 store，
+ *     避免主/副两端各自维护一份 trace 状态导致原点漂移。
  */
 
-import { useEffect, useRef } from 'react'
+import { useEffect } from 'react'
 import { useStore } from '../store'
-import { GnssMeasType } from '@shared'
-import { createTraceState, updateTrace } from '@shared/gnss/trace'
+import { GnssPosMsg, GnssVelMsg } from '@shared'
 
 // Window.labtool 类型由 src/preload/types.ts 全局声明
 export { }
 
 export function useRuntimeEvents(): void {
-  const traceStateRef = useRef(createTraceState())
-  const lastGnss = useStore((s) => s.lastGnss)
-  const gnssMeasType = useStore((s) => s.gnss.measType)
-
   /* 初始化：拉取串口列表 */
   useEffect(() => {
     void window.labtool.listPorts().then((ports) => {
@@ -54,23 +54,34 @@ export function useRuntimeEvents(): void {
     return off
   }, [])
 
-  /* GNSS 合并向量 */
+  /* GNSS 合并向量 + 本地投影 + 报文原始结果 */
   useEffect(() => {
     const off = window.labtool.onGnss((p) => {
-      useStore.getState().pushGnss(p.vec)
-      const projected = updateTrace(traceStateRef.current, p.vec.lat, p.vec.lng)
-      useStore.getState().pushGnssTrace(projected)
+      const s = useStore.getState()
+      s.pushGnss(p.vec)
+      s.pushGnssDetail(p.lastPos ?? null, p.lastVel ?? null)
+      s.pushGnssTrace({ east: p.east, north: p.north })
     })
     return off
   }, [])
 
-  /* GNSS 量测类型变化 → 主进程 */
+  /* GNSS 关闭时清空渲染端的衍生状态（轨迹、详情、合并向量） */
   useEffect(() => {
-    void window.labtool.setGnssMeasType(gnssMeasType as GnssMeasType)
-  }, [gnssMeasType])
+    const off = window.labtool.onSerialStatus((p) => {
+      if (p.device === 'GNSS' && p.status === 'closed') {
+        useStore.getState().clearGnss()
+      }
+    })
+    return off
+  }, [])
 
-  /* 关闭串口时重置轨迹原点 */
+  /* GNSS 位置/速度报文类型变化 → 主进程 */
+  const posMsg = useStore((s) => s.gnss.posMsg)
+  const velMsg = useStore((s) => s.gnss.velMsg)
   useEffect(() => {
-    if (!lastGnss) return
-  }, [lastGnss])
+    void window.labtool.setGnssPosMsg(posMsg as GnssPosMsg)
+  }, [posMsg])
+  useEffect(() => {
+    void window.labtool.setGnssVelMsg(velMsg as GnssVelMsg)
+  }, [velMsg])
 }

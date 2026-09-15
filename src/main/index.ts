@@ -15,6 +15,8 @@ import {
   DeviceType,
   FrameDescriptor,
   GnssMeasType,
+  GnssPosMsg,
+  GnssVelMsg,
   IpcChannel,
   SerialConfig,
   SerialStatus
@@ -24,6 +26,7 @@ import { Recorder } from './recorder/recorder'
 import { TaskScheduler } from './runtime/scheduler'
 import {
   CH,
+  AssistantEvent,
   DataEvent,
   FrameInvoke,
   GnssInvoke,
@@ -61,10 +64,34 @@ manager.on('gnss:status', (status, config, error) => {
     error
   })
 })
-manager.on('imu:frames', (frames) => scheduler.pushImuFrames(frames))
-manager.on('gnss:merged', (vec) => scheduler.pushGnssMerged(vec, []))
+manager.on('imu:frames', (frames) => {
+  scheduler.pushImuFrames(frames)
+  // 落盘：每个解析后的 IMU 帧写一行到 IMU_GNSS.bin
+  for (const f of frames) recorder.writeImuFrame(f)
+})
+manager.on('imu:raw', (buf) => {
+  // 落盘：原始字节直接写 IMU_HEX.bin
+  recorder.writeImuRawBytes(buf)
+})
+manager.on('gnss:merged', (vec, raw, east, north) => {
+  // 把原始报文行也透传给 scheduler，用于数据表 lastPos/lastVel 详细字段提取
+  scheduler.pushGnssMerged(vec, raw, east, north)
+  // 落盘：更新最新的 GNSS 合并向量，供下次 IMU 帧同步时使用
+  recorder.updateLastGnss(vec)
+})
 manager.on('gnss:raw', (line) => {
+  recorder.writeGnssText(line)
   mainWindow?.webContents.send(DataEvent.GnssRaw, { line })
+})
+manager.on('assistant:status', (status, config, error) => {
+  mainWindow?.webContents.send(AssistantEvent.Status, { status, config, error })
+})
+manager.on('assistant:data', (buf) => {
+  // AssistantDataPayload = { data: number[]; ts: number }
+  // 把 Buffer 转成普通 number[]，Electron IPC 才能安全跨进程传递
+  const data = new Array<number>(buf.length)
+  for (let i = 0; i < buf.length; i++) data[i] = buf[i]
+  mainWindow?.webContents.send(AssistantEvent.Data, { data, ts: Date.now() })
 })
 manager.on('error', (device, message) => {
   mainWindow?.webContents.send(LogEvent.AppError, { device, message })
@@ -119,9 +146,17 @@ function registerIpc(): void {
     return { ok: true }
   })
 
-  // 6) 切换 GNSS 量测类型
+  // 6) 切换 GNSS 量测类型 / 位置报文 / 速度报文
   ipcMain.handle(GnssInvoke.SetMeasType, async (_evt, args: { meas: GnssMeasType }) => {
     manager.setGnssMeasType(args.meas)
+    return { ok: true }
+  })
+  ipcMain.handle(GnssInvoke.SetPosMsg, async (_evt, args: { m: GnssPosMsg }) => {
+    manager.setGnssPosMsg(args.m)
+    return { ok: true }
+  })
+  ipcMain.handle(GnssInvoke.SetVelMsg, async (_evt, args: { m: GnssVelMsg }) => {
+    manager.setGnssVelMsg(args.m)
     return { ok: true }
   })
 
@@ -131,18 +166,25 @@ function registerIpc(): void {
     async (
       _evt,
       args: {
-        txtPath: string
-        fieldNames: string[]
-        alignGnss: boolean
+        baseName: string
+        outDir: string
+        enableGnss: boolean
+        imuChannelBytes: 4 | 8
+        imuFieldCount: number
+        imuFieldNames: string[]
       }
     ) => {
       try {
         recorder.start({
-          txtPath: args.txtPath,
-          fieldNames: args.fieldNames,
-          alignGnss: args.alignGnss
+          baseName: args.baseName,
+          outDir: args.outDir,
+          enableGnss: args.enableGnss,
+          imuChannelBytes: args.imuChannelBytes,
+          imuFieldCount: args.imuFieldCount,
+          imuFieldNames: args.imuFieldNames,
+          hasGnss: args.enableGnss
         })
-        return { ok: true }
+        return { ok: true, state: recorder.state() }
       } catch (e) {
         return { ok: false, error: (e as Error).message }
       }
@@ -150,8 +192,42 @@ function registerIpc(): void {
   )
   ipcMain.handle(RecorderInvoke.Stop, async () => {
     recorder.stop()
-    return { ok: true, state: recorder.state() }
+    return { ok: true }
   })
+  ipcMain.handle(RecorderInvoke.GetState, async () => recorder.state())
+
+  // 8) 串口助手（独立通道：原始字节透传）
+  ipcMain.handle(SerialInvoke.OpenAssistant, async (_evt, args: { config: SerialConfig }) => {
+    try {
+      await manager.openAssistant(args.config)
+      return { ok: true }
+    } catch (e) {
+      return { ok: false, error: (e as Error).message }
+    }
+  })
+  ipcMain.handle(SerialInvoke.CloseAssistant, async () => {
+    await manager.closeAssistant()
+    return { ok: true }
+  })
+  ipcMain.handle(SerialInvoke.WriteAssistant, async (_evt, args: { data: string }) => {
+    // data 是 hex 字符串（无空格）或文本（待实现：mode 字段）
+    const hex = args.data.trim()
+    if (!hex) return { ok: false, error: 'empty data' }
+    let buf: Buffer
+    if (/^[\dA-Fa-f\s]+$/.test(hex) && hex.replace(/\s/g, '').length % 2 === 0) {
+      // 当作 hex 解析
+      try {
+        buf = Buffer.from(hex.replace(/\s/g, ''), 'hex')
+      } catch (e) {
+        return { ok: false, error: 'hex parse failed' }
+      }
+    } else {
+      buf = Buffer.from(hex, 'utf8')
+    }
+    const n = manager.writeAssistant(buf)
+    return { ok: true, written: n }
+  })
+  ipcMain.handle(SerialInvoke.GetAssistantState, async () => manager.getAssistantState())
 
   // 8) 协议帧配置加载/保存
   ipcMain.handle(FrameInvoke.SaveConfig, async (_evt, args: { content: string }) => {

@@ -14,7 +14,11 @@ import {
   FieldRole,
   FrameField,
   ParsedFrame,
+  GnssLastPos,
+  GnssLastVel,
+  GnssPosMsg,
   GnssVec8,
+  GnssVelMsg,
   SerialConfig,
   SerialStatus
 } from '@shared'
@@ -82,7 +86,11 @@ interface FrameSlice {
   insertRow(at: number, role?: FieldRole): void
   deleteRow(at: number): void
   updateField(id: string, patch: Partial<FrameField>): void
-  setPlotFlag(id: string, slot: 1 | 2 | 3, value: boolean): void
+  /** 设置某字段在指定 slot 的绘图标记
+   *  每个 slot 最多容纳 3 条曲线；超过则忽略并返回 false */
+  setPlotFlag(id: string, slot: 1 | 2 | 3, value: boolean): boolean
+  /** 各 slot 当前使用数（最多 3） */
+  getSlotCount(slot: 1 | 2 | 3): number
 
   confirm(): FrameField[]
   toggleConfirm(): void
@@ -165,7 +173,10 @@ interface SerialSlice {
     status: SerialStatus
     config?: SerialConfig
     active: boolean
-    measType: number
+    /** 位置报文类型（GPGGA / BESTPOS，GPGGA 兼容 GNGGA） */
+    posMsg: GnssPosMsg
+    /** 速度报文类型（GPVTG / BESTVEL，GPVTG 兼容 GNVTG） */
+    velMsg: GnssVelMsg
     error?: string
   }
 
@@ -175,7 +186,8 @@ interface SerialSlice {
   setGnssConfig(cfg: SerialConfig): void
   setGnssStatus(s: SerialStatus, error?: string): void
   setGnssActive(on: boolean): void
-  setGnssMeasType(t: number): void
+  setGnssPosMsg(m: GnssPosMsg): void
+  setGnssVelMsg(m: GnssVelMsg): void
 }
 
 /* ============================================================
@@ -189,20 +201,33 @@ interface DataSlice {
   /** 帧计数器 */
   frameCounter: number
 
-  /** GNSS 最新值 */
+  /** GNSS 最新 8 维向量 */
   lastGnss: GnssVec8 | null
+  /** 最近一次收到的位置报文（用于数据表：HDOP/VDOP/Sat/Status 等） */
+  lastGnssPos: GnssLastPos | null
+  /** 最近一次收到的速度报文（用于数据表：heading/speed 等） */
+  lastGnssVel: GnssLastVel | null
   /** GNSS 轨迹本地投影 */
   gnssTrace: { east: number; north: number }[]
 
   /** 落盘 */
   recording: boolean
-  recInfo: { txtPath?: string; binPath?: string; bytes: number; lines: number }
-  setRecording(on: boolean, info?: { txtPath?: string; binPath?: string }): void
-  updateRecInfo(p: Partial<{ bytes: number; lines: number }>): void
+  recState: import('./recorder-types').RecorderState | null
+  setRecording(state: import('./recorder-types').RecorderState | null): void
+  setRecState(s: import('./recorder-types').RecorderState | null): void
+  updateRecCounters(p: {
+    imuHexBytes?: number
+    gnssTxtBytes?: number
+    parsedBinFrames?: number
+    parsedTxtBytes?: number
+  }): void
 
   pushFrames(frames: ParsedFrame[]): void
   pushGnss(vec: GnssVec8): void
+  pushGnssDetail(pos: GnssLastPos | null, vel: GnssLastVel | null): void
   pushGnssTrace(p: { east: number; north: number }): void
+  /** 关闭 GNSS 时清空所有 GNSS 衍生状态 */
+  clearGnss(): void
 }
 
 /* ============================================================
@@ -215,14 +240,15 @@ const TRACE_MAX = 3600
 
 const initialSerial: SerialSlice = {
   imu: { status: SerialStatus.Closed, availablePorts: [] },
-  gnss: { status: SerialStatus.Closed, active: false, measType: 1 },
+  gnss: { status: SerialStatus.Closed, active: false, posMsg: GnssPosMsg.GPGGA, velMsg: GnssVelMsg.GPVTG },
   setAvailablePorts: () => {},
   setImuConfig: () => {},
   setImuStatus: () => {},
   setGnssConfig: () => {},
   setGnssStatus: () => {},
   setGnssActive: () => {},
-  setGnssMeasType: () => {}
+  setGnssPosMsg: () => {},
+  setGnssVelMsg: () => {}
 }
 
 const initialData: DataSlice = {
@@ -230,14 +256,19 @@ const initialData: DataSlice = {
   tableValues: {},
   frameCounter: 0,
   lastGnss: null,
+  lastGnssPos: null,
+  lastGnssVel: null,
   gnssTrace: [],
   recording: false,
-  recInfo: { bytes: 0, lines: 0 },
+  recState: null,
   setRecording: () => {},
-  updateRecInfo: () => {},
+  setRecState: () => {},
+  updateRecCounters: () => {},
   pushFrames: () => {},
   pushGnss: () => {},
-  pushGnssTrace: () => {}
+  pushGnssDetail: () => {},
+  pushGnssTrace: () => {},
+  clearGnss: () => {}
 }
 
 import { compileDescriptor, listPlottable, parseFrameConfigCsv, serializeFrameConfigCsv } from '@shared'
@@ -295,13 +326,28 @@ export const useStore = create<Store>()(
         fields: s.fields.map((f) => (f.id === id ? { ...f, ...patch } : f))
       })),
 
-    setPlotFlag: (id, slot, value) =>
-      set((s) => {
-        const k = (`isPlot${slot}` as const) as 'isPlot1' | 'isPlot2' | 'isPlot3'
-        return {
-          fields: s.fields.map((f) => (f.id === id ? { ...f, [k]: value } : f))
+    setPlotFlag: (id, slot, value) => {
+      const s = get()
+      const k = (`isPlot${slot}` as const) as 'isPlot1' | 'isPlot2' | 'isPlot3'
+      if (value) {
+        // 勾选：检查该 slot 是否已满 3
+        const count = s.fields.filter((f) => f.role === 'Data' && f[k]).length
+        if (count >= 3) {
+          // 已满；查看要勾选的字段是否已经在该 slot
+          const target = s.fields.find((f) => f.id === id)
+          if (!target || !target[k]) return false
         }
-      }),
+      }
+      set({
+        fields: s.fields.map((f) => (f.id === id ? { ...f, [k]: value } : f))
+      })
+      return true
+    },
+    getSlotCount: (slot) => {
+      const s = get()
+      const k = (`isPlot${slot}` as const) as 'isPlot1' | 'isPlot2' | 'isPlot3'
+      return s.fields.filter((f) => f.role === 'Data' && f[k]).length
+    },
 
     confirm: () => {
       // 实际编译工作留给渲染层调用 compileDescriptor；这里只是 UI 状态翻转
@@ -334,22 +380,32 @@ export const useStore = create<Store>()(
       set((s) => ({ gnss: { ...s.gnss, status, error } })),
     setGnssActive: (on) =>
       set((s) => ({ gnss: { ...s.gnss, active: on } })),
-    setGnssMeasType: (t) =>
-      set((s) => ({ gnss: { ...s.gnss, measType: t } })),
+    setGnssPosMsg: (m) =>
+      set((s) => ({ gnss: { ...s.gnss, posMsg: m } })),
+    setGnssVelMsg: (m) =>
+      set((s) => ({ gnss: { ...s.gnss, velMsg: m } })),
 
     /* ---------------- DataSlice ---------------- */
     ...initialData,
-    setRecording: (on, info) =>
-      set((s) => ({
-        recording: on,
-        recInfo: {
-          txtPath: info?.txtPath ?? s.recInfo.txtPath,
-          binPath: info?.binPath ?? s.recInfo.binPath,
-          bytes: on ? 0 : s.recInfo.bytes,
-          lines: on ? 0 : s.recInfo.lines
+    setRecording: (state) =>
+      set({
+        recording: !!state,
+        recState: state
+      }),
+    setRecState: (s) => set({ recState: s }),
+    updateRecCounters: (p) =>
+      set((cur) => {
+        if (!cur.recState) return {}
+        return {
+          recState: {
+            ...cur.recState,
+            ...(p.imuHexBytes !== undefined ? { imuHexBytes: p.imuHexBytes } : {}),
+            ...(p.gnssTxtBytes !== undefined ? { gnssTxtBytes: p.gnssTxtBytes } : {}),
+            ...(p.parsedBinFrames !== undefined ? { parsedBinFrames: p.parsedBinFrames } : {}),
+            ...(p.parsedTxtBytes !== undefined ? { parsedTxtBytes: p.parsedTxtBytes } : {})
+          }
         }
-      })),
-    updateRecInfo: (p) => set((s) => ({ recInfo: { ...s.recInfo, ...p } })),
+      }),
 
     pushFrames: (frames) =>
       set((s) => {
@@ -367,12 +423,19 @@ export const useStore = create<Store>()(
       }),
 
     pushGnss: (vec) => set({ lastGnss: vec }),
+    pushGnssDetail: (pos, vel) =>
+      set((s) => ({
+        lastGnssPos: pos ?? s.lastGnssPos,
+        lastGnssVel: vel ?? s.lastGnssVel
+      })),
     pushGnssTrace: (p) =>
       set((s) => {
         const next = s.gnssTrace.length >= TRACE_MAX ? s.gnssTrace.slice(s.gnssTrace.length - TRACE_MAX + 1) : s.gnssTrace.slice()
         next.push(p)
         return { gnssTrace: next }
       }),
+    clearGnss: () =>
+      set({ lastGnss: null, lastGnssPos: null, lastGnssVel: null, gnssTrace: [] }),
 
     /* ---------------- UISlice ---------------- */
     theme: (loadPersisted().theme ?? 'dark') as ThemeMode,

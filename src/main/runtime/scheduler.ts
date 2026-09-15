@@ -9,7 +9,8 @@
  */
 
 import { BrowserWindow } from 'electron'
-import { GnssVec8, ParsedFrame } from '../../shared'
+import { GnssLastPos, GnssLastVel, GnssVec8, ParsedFrame } from '../../shared'
+import { lastGnssPosVel } from '../../shared/gnss/parser'
 import { Recorder } from '../recorder/recorder'
 import { SerialManager } from '../serial/manager'
 import { DataEvent, LogEvent } from '../ipc/channels'
@@ -57,8 +58,6 @@ export class TaskScheduler {
   /** 由 SerialManager 的 'imu:frames' 事件回调调用 */
   pushImuFrames(frames: ParsedFrame[]): void {
     if (frames.length === 0) return
-    // 落盘
-    this.deps.recorder.writeImuBatch(frames)
     // 推送给渲染端
     const win = this.deps.getWindow()
     win?.webContents.send(DataEvent.FrameParsed, {
@@ -68,11 +67,18 @@ export class TaskScheduler {
   }
 
   /** 由 SerialManager 的 'gnss:merged' 事件回调调用 */
-  pushGnssMerged(vec: GnssVec8, raw: string[]): void {
-    this.deps.recorder.markGnssUpdated(vec)
+  pushGnssMerged(vec: GnssVec8, raw: string[], east = 0, north = 0): void {
     this.lastGnssForRenderer = vec
     const win = this.deps.getWindow()
-    win?.webContents.send(DataEvent.GnssParsed, { vec, raw: raw[raw.length - 1] ?? '' })
+    const { lastPos, lastVel } = lastGnssPosVel(raw)
+    win?.webContents.send(DataEvent.GnssParsed, {
+      vec,
+      raw: raw[raw.length - 1] ?? '',
+      east,
+      north,
+      lastPos: lastPos as GnssLastPos | undefined,
+      lastVel: lastVel as GnssLastVel | undefined
+    })
   }
 
   private lastGnssForRenderer: GnssVec8 | null = null

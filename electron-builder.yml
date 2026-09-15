@@ -28,13 +28,15 @@ win:
     - target: portable
       arch:
         - x64
+        - ia32
     - target: nsis
       arch:
         - x64
+        - ia32
   artifactName: ${productName}-${version}-${arch}.${ext}
 
 portable:
-  artifactName: ${productName}-${version}-portable.${ext}
+  artifactName: ${productName}-${version}-${arch}-portable.${ext}
 
 nsis:
   oneClick: false                       # 不静默安装
@@ -44,4 +46,4 @@ nsis:
   createStartMenuShortcut: true
   shortcutName: LabTool-V3
   uninstallDisplayName: LabTool-V3
-  artifactName: ${productName}-${version}-setup.${ext}
+  artifactName: ${productName}-${version}-${arch}-setup.${ext}

@@ -1,0 +1,176 @@
+.assistant-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 10px;
+  gap: 8px;
+  background: var(--bg-secondary);
+  overflow: auto;
+}
+
+.ap-config {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px;
+  flex-shrink: 0;
+}
+
+.ap-rx, .ap-tx {
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+  flex: 1 1 0;
+  min-height: 0;
+}
+
+.ap-rx-header, .ap-tx-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 10px;
+  background: var(--bg-elev);
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.ap-section-title {
+  font-weight: 600;
+  color: var(--accent);
+  font-family: 'Consolas', monospace;
+}
+
+.ap-rx-stats, .ap-tx-stats {
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-family: 'Consolas', monospace;
+}
+.ap-rx-stats b, .ap-tx-stats b {
+  color: var(--success);
+}
+
+.ap-tx-hint {
+  color: var(--text-secondary);
+  font-size: 10px;
+  font-style: italic;
+  margin-left: auto;
+}
+
+.ap-mode-toggle {
+  display: flex;
+  gap: 0;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.ap-mode-toggle button {
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  border: none;
+  padding: 2px 10px;
+  font-size: 10px;
+  font-family: 'Consolas', monospace;
+  cursor: pointer;
+}
+.ap-mode-toggle button.on {
+  background: var(--accent);
+  color: white;
+}
+.ap-mode-toggle button:not(.on):hover { color: var(--text-primary); }
+
+.ap-btn {
+  background: var(--bg-card);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  padding: 3px 12px;
+  border-radius: 3px;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.ap-btn:hover:not(:disabled) { border-color: var(--accent); }
+.ap-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.ap-btn.small { padding: 2px 8px; font-size: 10px; }
+.ap-btn.copied {
+  border-color: var(--success);
+  color: var(--success);
+}
+.ap-btn.primary {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+  font-weight: 500;
+}
+.ap-btn.primary:hover:not(:disabled) { background: var(--accent-hover); }
+
+.ap-rx-area {
+  flex: 1 1 0;
+  margin: 0;
+  padding: 8px 12px;
+  font-family: 'Consolas', 'Courier New', monospace;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text-primary);
+  background: var(--bg-primary);
+  overflow: auto;
+  white-space: pre;
+  min-height: 0;
+  /* 必须显式打开选择 —— 全局 body 是 user-select: none */
+  user-select: text;
+  -webkit-user-select: text;
+  cursor: text;
+}
+
+.ap-rx-empty {
+  color: var(--text-secondary);
+  font-style: italic;
+  font-size: 12px;
+}
+
+.ap-tx-input {
+  flex: 0 0 auto;
+  resize: vertical;
+  min-height: 60px;
+  max-height: 200px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  border: none;
+  border-top: 1px solid var(--border);
+  padding: 8px 12px;
+  font-family: 'Consolas', 'Courier New', monospace;
+  font-size: 12px;
+  outline: none;
+}
+.ap-tx-input:focus { background: var(--bg-elev); }
+
+.ap-error {
+  background: rgba(231, 76, 60, 0.12);
+  color: var(--danger);
+  padding: 6px 10px;
+  border-radius: 3px;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+/* 顶部 LED 复用 sp-led */
+.sp-led {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  margin-left: 4px;
+  flex-shrink: 0;
+}
+.sp-led.on {
+  background: radial-gradient(circle at 30% 30%, #6fff8c, #22c55e);
+  box-shadow: 0 0 6px rgba(74, 222, 128, 0.5);
+}
+.sp-led.off {
+  background: radial-gradient(circle at 30% 30%, #ff7878, #c0392b);
+}

@@ -1,10 +1,10 @@
 /**
  * LabTool-V3 协议帧编辑器
- * 对应 V2 mainwindow.cpp 中：
- *   - 协议帧表格 (7 列)
- *   - 插入帧头/帧尾/时间戳/校验和 行
- *   - "确认数据帧" 按钮 → 编译 FrameDescriptor 并发给主进程
- *   - 加载/保存 .txt 配置
+ *
+ * 操作模式：
+ *   - 点击某行 → 选中（高亮）
+ *   - 工具栏「在选中行下方插入」「删除选中行」基于选中索引操作
+ *   - 未选中时，工具栏默认按钮「添加数据」「删除末行」可用
  */
 
 import { useEffect, useState } from 'react'
@@ -27,12 +27,21 @@ export function FrameEditor({ onError }: Props): JSX.Element {
   const insertRow = useStore((s) => s.insertRow)
   const deleteRow = useStore((s) => s.deleteRow)
   const updateField = useStore((s) => s.updateField)
-  const setPlotFlag = useStore((s) => s.setPlotFlag)
   const setEndian = useStore((s) => s.setEndian)
   const confirm = useStore((s) => s.confirm)
   const toggleConfirm = useStore((s) => s.toggleConfirm)
   const toCsv = useStore((s) => s.toCsv)
   const parseFromCsv = useStore((s) => s.parseFromCsv)
+
+  /** 当前选中的行索引（null 表示未选中） */
+  const [selectedIdx, setSelectedIdx] = useState<number | null>(null)
+
+  // 选中索引若超出范围（删行后），自动归零
+  useEffect(() => {
+    if (selectedIdx !== null && selectedIdx >= fields.length) {
+      setSelectedIdx(fields.length > 0 ? fields.length - 1 : null)
+    }
+  }, [fields.length, selectedIdx])
 
   const [derivedPreview, setDerivedPreview] = useState<{
     frameLen: number
@@ -41,7 +50,6 @@ export function FrameEditor({ onError }: Props): JSX.Element {
     timestampPos: number
   } | null>(null)
 
-  // 预览：实时显示当前表格的 frameLen / 帧头等
   useEffect(() => {
     try {
       const d = compileDescriptor(fields, endian).derived!
@@ -53,11 +61,9 @@ export function FrameEditor({ onError }: Props): JSX.Element {
       })
     } catch (e) {
       setDerivedPreview(null)
-      // 不在每次输入时弹错误，hover 提示即可
     }
   }, [fields, endian])
 
-  // 通知主进程切换描述符（仅在已确认状态下）
   useEffect(() => {
     if (!confirmed) return
     try {
@@ -96,6 +102,7 @@ export function FrameEditor({ onError }: Props): JSX.Element {
       return
     }
     parseFromCsv(r.content)
+    setSelectedIdx(null)
   }
 
   async function handleSave(): Promise<void> {
@@ -105,16 +112,30 @@ export function FrameEditor({ onError }: Props): JSX.Element {
     if (!r.ok) onError(r.error ?? '保存失败')
   }
 
-  /* ============================================================
-   * 渲染
-   * ============================================================ */
+  function handleInsertBelow(): void {
+    if (selectedIdx === null) return
+    insertRow(selectedIdx + 1, 'Data')
+    // 选中新插入的行
+    setSelectedIdx(selectedIdx + 1)
+  }
+
+  function handleDeleteSelected(): void {
+    if (selectedIdx === null) return
+    deleteRow(selectedIdx)
+    // 选中索引由 effect 调整
+  }
+
+  function handleRowClick(idx: number): void {
+    setSelectedIdx((cur) => (cur === idx ? null : idx))
+  }
+
   return (
     <div className="frame-editor">
       <div className="fe-toolbar">
-        <button className="fe-btn" disabled={confirmed} onClick={() => insertRow(0, 'Frame_Header')}>
+        <button className="fe-btn" disabled={confirmed} onClick={() => { insertRow(0, 'Frame_Header'); setSelectedIdx(0) }}>
           {t('frame.insertHeader')}
         </button>
-        <button className="fe-btn" disabled={confirmed} onClick={() => insertRow(0, 'Time_Stamp')}>
+        <button className="fe-btn" disabled={confirmed} onClick={() => { insertRow(0, 'Time_Stamp'); setSelectedIdx(0) }}>
           {t('frame.insertTimestamp')}
         </button>
         <button className="fe-btn" disabled={confirmed} onClick={() => addRow('Check_Sum')}>
@@ -123,11 +144,23 @@ export function FrameEditor({ onError }: Props): JSX.Element {
         <button className="fe-btn" disabled={confirmed} onClick={() => addRow()}>
           {t('frame.addData')}
         </button>
-        <button className="fe-btn danger" disabled={confirmed} onClick={() => {
-          const idx = fields.length - 1
-          if (idx >= 0) deleteRow(idx)
-        }}>
-          {t('frame.deleteLast')}
+        <span className="fe-divider" />
+        {/* 基于选中行的操作 */}
+        <button
+          className="fe-btn"
+          disabled={confirmed || selectedIdx === null}
+          onClick={handleInsertBelow}
+          title={t('frame.insertBelowHint')}
+        >
+          ↓ {t('frame.insertBelow')}
+        </button>
+        <button
+          className="fe-btn danger"
+          disabled={confirmed || selectedIdx === null}
+          onClick={handleDeleteSelected}
+          title={t('frame.deleteSelectedHint')}
+        >
+          × {t('frame.deleteSelected')}
         </button>
         <span className="fe-divider" />
         <button className="fe-btn" disabled={confirmed} onClick={handleLoad}>{t('frame.loadConfig')}</button>
@@ -145,6 +178,11 @@ export function FrameEditor({ onError }: Props): JSX.Element {
           </select>
         </label>
         <span className="fe-spacer" />
+        {selectedIdx !== null && (
+          <span className="fe-selection-info">
+            {t('frame.selectedIdx', { idx: selectedIdx + 1, total: fields.length })}
+          </span>
+        )}
         <button
           className={'fe-btn primary ' + (confirmed ? 'active' : '')}
           onClick={confirmed ? toggleConfirm : handleConfirm}
@@ -163,17 +201,22 @@ export function FrameEditor({ onError }: Props): JSX.Element {
               <th style={{ width: 130 }}>{t('frame.type')}</th>
               <th style={{ width: 110 }}>{t('frame.default')}</th>
               <th style={{ width: 100 }}>{t('frame.scale')}</th>
-              <th style={{ width: 36 }}>{t('frame.plot1')}</th>
-              <th style={{ width: 36 }}>{t('frame.plot2')}</th>
-              <th style={{ width: 36 }}>{t('frame.plot3')}</th>
               {!confirmed && <th style={{ width: 36 }}>{t('frame.del')}</th>}
             </tr>
           </thead>
           <tbody>
             {fields.map((f, idx) => {
               const isSpecialRow = f.role !== 'Data'
+              const isSelected = selectedIdx === idx
               return (
-                <tr key={f.id} className={isSpecialRow ? 'fe-row-special' : ''}>
+                <tr
+                  key={f.id}
+                  className={
+                    (isSpecialRow ? 'fe-row-special' : '') +
+                    (isSelected ? ' fe-row-selected' : '')
+                  }
+                  onClick={() => handleRowClick(idx)}
+                >
                   <td className="fe-cell-num">{idx}</td>
                   <td>
                     <input
@@ -233,33 +276,16 @@ export function FrameEditor({ onError }: Props): JSX.Element {
                       }}
                     />
                   </td>
-                  <td className="fe-cell-plot">
-                    <input
-                      type="checkbox"
-                      disabled={confirmed || f.role !== 'Data'}
-                      checked={f.isPlot1}
-                      onChange={(e) => setPlotFlag(f.id, 1, e.target.checked)}
-                    />
-                  </td>
-                  <td className="fe-cell-plot">
-                    <input
-                      type="checkbox"
-                      disabled={confirmed || f.role !== 'Data'}
-                      checked={f.isPlot2}
-                      onChange={(e) => setPlotFlag(f.id, 2, e.target.checked)}
-                    />
-                  </td>
-                  <td className="fe-cell-plot">
-                    <input
-                      type="checkbox"
-                      disabled={confirmed || f.role !== 'Data'}
-                      checked={f.isPlot3}
-                      onChange={(e) => setPlotFlag(f.id, 3, e.target.checked)}
-                    />
-                  </td>
                   {!confirmed && (
                     <td className="fe-cell-del">
-                      <button className="fe-btn-icon" onClick={() => deleteRow(idx)} title={t('frame.del')}>×</button>
+                      <button
+                        className="fe-btn-icon"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          deleteRow(idx)
+                        }}
+                        title={t('frame.del')}
+                      >×</button>
                     </td>
                   )}
                 </tr>

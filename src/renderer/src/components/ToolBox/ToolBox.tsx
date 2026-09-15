@@ -13,19 +13,19 @@ import { DataDisplay } from '../DataDisplay/DataDisplay'
 import { GnssDisplay } from '../GnssDisplay/GnssDisplay'
 import { CurvePlot } from '../CurvePlot/CurvePlot'
 import { GnssTracePlot } from '../GnssTracePlot/GnssTracePlot'
+import { AssistantPanel } from '../AssistantPanel/AssistantPanel'
 import { useStore } from '../../store'
 import { useT } from '../../i18n'
 import './ToolBox.css'
 
-export type PanelKey = 'frame' | 'serial' | 'gnss' | 'display' | 'curve' | 'trace'
+export type PanelKey = 'frame' | 'serial' | 'gnss' | 'display' | 'curve' | 'trace' | 'assistant'
 interface Props {
   panel: PanelKey
   setPanel(p: PanelKey): void
-  xMode: 'count' | 'timestamp'
   onError(msg: string): void
 }
 
-export function ToolBox({ panel, setPanel, xMode, onError }: Props): JSX.Element {
+export function ToolBox({ panel, setPanel, onError }: Props): JSX.Element {
   const t = useT()
   const frameConfirmed = useStore((s) => s.confirmed)
   const [hovered, setHovered] = useState<PanelKey | null>(null)
@@ -36,7 +36,8 @@ export function ToolBox({ panel, setPanel, xMode, onError }: Props): JSX.Element
     { key: 'gnss', icon: '🛰️', labelKey: 'tool.gnss' },
     { key: 'display', icon: '📊', labelKey: 'tool.display' },
     { key: 'curve', icon: '📈', labelKey: 'tool.curve' },
-    { key: 'trace', icon: '🗺️', labelKey: 'tool.trace' }
+    { key: 'trace', icon: '🗺️', labelKey: 'tool.trace' },
+    { key: 'assistant', icon: '🔧', labelKey: 'tool.assistant' }
   ]
 
   return (
@@ -61,8 +62,9 @@ export function ToolBox({ panel, setPanel, xMode, onError }: Props): JSX.Element
         {panel === 'serial' && <SerialPortPanel onError={onError} frameConfirmed={frameConfirmed} />}
         {panel === 'gnss' && <GnssPortPanel onError={onError} />}
         {panel === 'display' && <DataDisplay />}
-        {panel === 'curve' && <CurvePlot xMode={xMode} />}
+        {panel === 'curve' && <CurvePlot />}
         {panel === 'trace' && <GnssTracePlot />}
+        {panel === 'assistant' && <AssistantPanel />}
       </div>
     </aside>
   )

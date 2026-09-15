@@ -146,10 +146,22 @@ export enum SerialStatus {
   Error = 'error'
 }
 
-/** GNSS 量测类型 - 对应 V2 GNSSMeasType */
+/** GNSS 量测类型 - 对应 V2 GNSSMeasType（保留兼容；新代码请用 PosMsg/VelMsg） */
 export enum GnssMeasType {
   OnlyPos = 0,
   VelPos = 1
+}
+
+/** 位置报文选择 - 对应 V2 GPGGA / BESTPOS */
+export enum GnssPosMsg {
+  GPGGA = 'GPGGA',
+  BESTPOS = 'BESTPOS'
+}
+
+/** 速度报文选择 - 对应 V2 GPVTG / BESTVEL */
+export enum GnssVelMsg {
+  GPVTG = 'GPVTG',
+  BESTVEL = 'BESTVEL'
 }
 
 /* ============================================================
@@ -227,8 +239,15 @@ export const IpcChannel = {
   SerialClose: 'serial:close',
   FrameSet: 'frame:set',
   GnssMeasTypeSet: 'gnss:meas-type',
+  GnssPosMsgSet: 'gnss:pos-msg',
+  GnssVelMsgSet: 'gnss:vel-msg',
   RecorderStart: 'recorder:start',
   RecorderStop: 'recorder:stop',
+  RecorderGetState: 'recorder:get-state',
+  AssistantOpen: 'assistant:open',
+  AssistantClose: 'assistant:close',
+  AssistantWrite: 'assistant:write',
+  AssistantGetState: 'assistant:get-state',
   FrameConfigLoad: 'frame-config:load',
   FrameConfigSave: 'frame-config:save',
 
@@ -237,6 +256,8 @@ export const IpcChannel = {
   FrameParsed: 'frame:parsed',
   GnssParsed: 'gnss:parsed',
   GnssRaw: 'gnss:raw',
+  AssistantStatus: 'assistant:status',
+  AssistantData: 'assistant:data',
   RecorderLog: 'recorder:log',
   AppError: 'app:error'
 } as const
@@ -263,12 +284,51 @@ export interface FrameParsedPayload {
   lastGnss?: GnssVec8 | null
 }
 
+/** 最近一次收到的某类报文原始解析结果（用于表格 / 详情） */
+export interface GnssLastPos {
+  kind: 'GPGGA' | 'BESTPOS'
+  utcTime: string
+  latitude: number
+  longitude: number
+  altitude: number
+  hdop: number
+  /** GPGGA only */
+  fixQuality?: number
+  numSatellites?: number
+  geoidHeight?: number
+  latitudeDirection?: 'N' | 'S'
+  longitudeDirection?: 'E' | 'W'
+  /** BESTPOS only */
+  vdop?: number
+  status?: number
+  timestamp?: string
+}
+
+export interface GnssLastVel {
+  kind: 'GPVTG' | 'BESTVEL'
+  /** GPVTG only */
+  trueHeading?: number
+  magneticHeading?: number
+  speedKnots?: number
+  speedKmh?: number
+  /** BESTVEL only */
+  velocityH?: number
+  heading?: number
+  velocityU?: number
+  week?: number
+  second?: number
+}
+
 export interface GnssParsedPayload {
   raw: string
   vec: GnssVec8
   /** 本地投影坐标（用于轨迹图） */
   east: number
   north: number
+  /** 最近一次收到的位置报文（用于数据表：HDOP/VDOP/Sat/Status/Timestamp 等） */
+  lastPos?: GnssLastPos
+  /** 最近一次收到的速度报文（用于数据表：heading/velocityH 等） */
+  lastVel?: GnssLastVel
 }
 
 export interface RecorderLogPayload {

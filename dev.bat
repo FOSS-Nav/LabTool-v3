@@ -1,6 +1,6 @@
 @echo off
 REM ============================================================
-REM LabTool-V3 快速开发模式
+REM LabTool-V3 快速开发模式（沙箱兼容）
 REM ============================================================
 
 setlocal EnableDelayedExpansion
@@ -29,6 +29,12 @@ if not exist "node_modules\electron\dist\electron.exe" (
     popd
 )
 
-echo [LabTool-V3] 启动开发模式 ...
-call npm run dev
+REM 确保 sucrase 已装（dev-launcher 依赖）
+if not exist "node_modules\sucrase" (
+    echo [INFO] 安装 sucrase ^(dev-launcher 依赖^) ...
+    call npm install --no-save --ignore-scripts sucrase
+)
+
+echo [LabTool-V3] 启动 dev-launcher ...
+call node scripts\dev-launcher.mjs
 endlocal

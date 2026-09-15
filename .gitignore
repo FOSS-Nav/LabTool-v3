@@ -1,11 +1,102 @@
+# ============================================================
+# LabTool-V3 .gitignore
+# ============================================================
+# 上传规则：
+#   ✅ 提交：src/、tests/、scripts/、build/(图标等)、*.json、*.ts、*.tsx、*.md、.bat、*.yml
+#   ❌ 忽略：构建产物、依赖、缓存、IDE/编辑器、本机数据
+# ============================================================
+
+# ---------- 依赖 ----------
 node_modules/
+jspm_packages/
+
+# ---------- 构建产物 ----------
+# electron-vite 产物（编译后的 main / preload / renderer）
 out/
+# electron-builder 打包产物
 dist/
+release/
+# electron-builder 解包目录（按 arch 分目录）
+dist/win-unpacked/
+dist/win-ia32-unpacked/
+dist/win-arm64-unpacked/
+dist/builder-debug.yml
+
+# ---------- TypeScript / Vite 缓存与中间产物 ----------
 .vite/
-.npm-cache/
-*.log
-.DS_Store
-.env.local
 *.tsbuildinfo
-.idea/
+# tsc composite 模式从 *.ts 生成的 .d.ts / .js（不应入库）
+electron.vite.config.d.ts
+electron.vite.config.js
+
+# ---------- 工具链缓存 ----------
+# Electron 二进制下载缓存
+.electron-cache/
+# npm 缓存（项目本地）
+.npm-cache/
+.cache/
+# esbuild / pnpm / yarn 缓存
+.eslintcache
+.pnpm-store/
+
+# ---------- 日志 ----------
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+build-pack.log
+build-*.log
+
+# ---------- 测试与运行时落盘数据 ----------
+# LabTool-V3 软件运行时写入的捕获数据
+data-*.bin
+data-*.txt
+data-*.dat
+
+# ---------- 环境配置 ----------
+.env
+.env.local
+.env.*.local
+
+# ---------- 编辑器 / IDE ----------
 .vscode/
+.idea/
+*.swp
+*.swo
+*.sublime-project
+*.sublime-workspace
+.project
+.classpath
+.settings/
+
+# ---------- 操作系统垃圾 ----------
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.lnk
+
+# ---------- 临时文件 ----------
+*.bak
+*.tmp
+*.orig
+*.rej
+*.pid
+*.seed
+*.pid.lock
+*.tgz
+.cache
+.parcel-cache
+
+# ---------- 打包过程临时 ----------
+# electron-builder 在 win-unpacked 之外的中间目录
+tmp/
+temp/
+
+# ---------- 单独豁免（明确需要入库的） ----------
+# build/icon.png 等图标资源要上传，所以不忽略 build/
+# !build/icon.png
+# 注意：默认 gitignore 已经不会忽略整个 build/，但 build/win-unpacked/ 在上面已经显式排除

@@ -15,9 +15,12 @@ import {
   FrameDescriptor,
   FrameDecoder,
   GnssMeasType,
+  GnssPosMsg,
+  GnssVelMsg,
   SerialConfig,
   SerialStatus
 } from '../../shared'
+import { createTraceState, updateTrace } from '../../shared/gnss/trace'
 import { mergeGnssVec8 } from '../../shared/gnss/parser'
 
 interface DeviceState {
@@ -28,8 +31,14 @@ interface DeviceState {
   decoder?: FrameDecoder
   /** GNSS 行缓冲 */
   lineBuf: string
-  /** GNSS 量测类型（velpos / onlypos） */
+  /** GNSS 量测类型（velpos / onlypos）—— 旧 API 兼容 */
   measType: GnssMeasType
+  /** GNSS 位置报文（GPGGA / BESTPOS） */
+  posMsg: GnssPosMsg
+  /** GNSS 速度报文（GPVTG / BESTVEL） */
+  velMsg: GnssVelMsg
+  /** GNSS 本地投影状态（origin 锁定 + 滑动窗口） */
+  trace: ReturnType<typeof createTraceState>
 }
 
 export interface SerialEvents {
@@ -39,9 +48,20 @@ export interface SerialEvents {
   'imu:frames': [
     frames: ReturnType<FrameDecoder['push']>['frames']
   ]
-  /** 一批 GNSS 行已合并为 8 维向量 */
-  'gnss:merged': [vec: ReturnType<typeof mergeGnssVec8>, raw: string[]]
+  /** 一批 GNSS 行已合并为 8 维向量 + 本地投影 east/north */
+  'gnss:merged': [
+    vec: ReturnType<typeof mergeGnssVec8>,
+    raw: string[],
+    east: number,
+    north: number
+  ]
+  /** IMU 串口原始字节流（每个 chunk 一次） */
+  'imu:raw': [buf: Buffer]
   'gnss:raw': [line: string]
+  /** 串口助手：状态变化 */
+  'assistant:status': [status: SerialStatus, config?: SerialConfig, error?: string]
+  /** 串口助手：接收到的字节 */
+  'assistant:data': [buf: Buffer]
   'error': [device: DeviceType, message: string]
 }
 
@@ -51,8 +71,30 @@ export declare interface SerialManager {
 }
 
 export class SerialManager extends EventEmitter {
-  private imu: DeviceState = { status: SerialStatus.Closed, lineBuf: '', measType: GnssMeasType.VelPos }
-  private gnss: DeviceState = { status: SerialStatus.Closed, lineBuf: '', measType: GnssMeasType.VelPos }
+  private imu: DeviceState = {
+    status: SerialStatus.Closed,
+    lineBuf: '',
+    measType: GnssMeasType.VelPos,
+    posMsg: GnssPosMsg.GPGGA,
+    velMsg: GnssVelMsg.GPVTG,
+    trace: createTraceState()
+  }
+  private gnss: DeviceState = {
+    status: SerialStatus.Closed,
+    lineBuf: '',
+    measType: GnssMeasType.VelPos,
+    posMsg: GnssPosMsg.GPGGA,
+    velMsg: GnssVelMsg.GPVTG,
+    trace: createTraceState()
+  }
+  private assistant: DeviceState = {
+    status: SerialStatus.Closed,
+    lineBuf: '',
+    measType: GnssMeasType.VelPos,
+    posMsg: GnssPosMsg.GPGGA,
+    velMsg: GnssVelMsg.GPVTG,
+    trace: createTraceState()
+  }
 
   /** 列出可用串口名 */
   static async listPorts(): Promise<string[]> {
@@ -146,9 +188,95 @@ export class SerialManager extends EventEmitter {
     this.gnss.measType = t
   }
 
+  setGnssPosMsg(m: GnssPosMsg): void {
+    this.gnss.posMsg = m
+  }
+
+  setGnssVelMsg(m: GnssVelMsg): void {
+    this.gnss.velMsg = m
+  }
+
   /** 全关 */
   async shutdown(): Promise<void> {
-    await Promise.all([this.closeDevice('imu'), this.closeDevice('gnss')])
+    await Promise.all([
+      this.closeDevice('imu'),
+      this.closeDevice('gnss'),
+      this.closeAssistant()
+    ])
+  }
+
+  /* ============================================================
+   * 串口助手（独立于 IMU/GNSS 的第三个端口，不解析任何协议）
+   * ============================================================ */
+
+  /** 打开助手串口 */
+  async openAssistant(config: SerialConfig): Promise<void> {
+    await this.closeAssistant()
+    this.assistant.status = SerialStatus.Opening
+    this.emit('assistant:status', this.assistant.status, config)
+    const port = new SerialPort({
+      path: config.portName,
+      baudRate: config.baudRate,
+      dataBits: config.dataBits,
+      parity: this.mapParity(config.parity),
+      stopBits: this.mapStopBits(config.stopBits),
+      autoOpen: false
+    })
+    this.assistant.port = port
+    this.assistant.config = config
+    this.assistant.lineBuf = ''
+    port.on('data', (buf) => {
+      this.emit('assistant:data', buf)
+    })
+    port.on('error', (err) => {
+      this.assistant.status = SerialStatus.Error
+      this.emit('assistant:status', this.assistant.status, this.assistant.config, err.message)
+    })
+    port.on('close', () => {
+      this.assistant.status = SerialStatus.Closed
+      this.assistant.port = undefined
+      this.emit('assistant:status', this.assistant.status)
+    })
+    try {
+      await new Promise<void>((resolve, reject) => {
+        port.open((err) => (err ? reject(err) : resolve()))
+      })
+      this.assistant.status = SerialStatus.Open
+      this.emit('assistant:status', this.assistant.status, config)
+    } catch (e) {
+      this.assistant.status = SerialStatus.Error
+      this.emit('assistant:status', this.assistant.status, this.assistant.config, (e as Error).message)
+      throw e
+    }
+  }
+
+  /** 关闭助手串口 */
+  async closeAssistant(): Promise<void> {
+    const dev = this.assistant
+    if (dev.port && dev.port.isOpen) {
+      await new Promise<void>((resolve) => {
+        dev.port!.close(() => resolve())
+      })
+    }
+    dev.port = undefined
+    dev.status = SerialStatus.Closed
+    dev.config = undefined
+    dev.lineBuf = ''
+    this.emit('assistant:status', dev.status)
+  }
+
+  /** 助手串口写入 */
+  writeAssistant(data: Buffer | string): number {
+    const dev = this.assistant
+    if (!dev.port || !dev.port.isOpen) return 0
+    const buf = typeof data === 'string' ? Buffer.from(data, 'utf8') : data
+    dev.port.write(buf)
+    return buf.length
+  }
+
+  /** 助手状态查询 */
+  getAssistantState(): { status: SerialStatus; config?: SerialConfig } {
+    return { status: this.assistant.status, config: this.assistant.config }
   }
 
   /* ============================================================
@@ -165,6 +293,16 @@ export class SerialManager extends EventEmitter {
     dev.port = undefined
     dev.status = SerialStatus.Closed
     dev.config = undefined
+    if (which === 'gnss') {
+      // 重置 GNSS 本地投影原点（下次打开时重新锁定第 1 个有效点）
+      dev.lineBuf = ''
+      dev.trace.lat0 = 0
+      dev.trace.lng0 = 0
+      dev.trace.clRNh = 0
+      dev.trace.locked = false
+      dev.trace.east.length = 0
+      dev.trace.north.length = 0
+    }
     this.emit(`${which}:status` as const, dev.status)
   }
 
@@ -181,6 +319,9 @@ export class SerialManager extends EventEmitter {
   }
 
   private onImuData(buf: Buffer): void {
+    // 1) 总是先发出原始字节（用于落盘 IMU_HEX.bin）
+    this.emit('imu:raw', buf)
+    // 2) 再走状态机切帧
     if (!this.imu.decoder) return
     const u8 = new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength)
     const { frames } = this.imu.decoder.push(u8)
@@ -205,7 +346,9 @@ export class SerialManager extends EventEmitter {
     }
     if (lines.length > 0) {
       const vec = mergeGnssVec8(lines)
-      this.emit('gnss:merged', vec, lines)
+      // 计算本地投影：以首个有效 GPGGA/BESTPOS 为原点（共享给渲染端，确保一致）
+      const projected = updateTrace(this.gnss.trace, vec.lat, vec.lng)
+      this.emit('gnss:merged', vec, lines, projected.east, projected.north)
     }
   }
 

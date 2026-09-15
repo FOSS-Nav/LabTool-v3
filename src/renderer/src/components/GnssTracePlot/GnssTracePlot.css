@@ -7,7 +7,11 @@
   border-radius: 6px;
   overflow: hidden;
 }
+
 .gtp-header {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
   padding: 8px 12px;
   background: var(--bg-elev);
   border-bottom: 1px solid var(--border);
@@ -17,9 +21,141 @@
   font-weight: 500;
   color: var(--text-primary);
 }
+.gtp-subtitle {
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-family: Consolas, monospace;
+}
+
+.gtp-canvas-wrap {
+  position: relative;
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: hidden;
+}
 .gtp-canvas {
-  flex: 1;
+  position: absolute;
+  inset: 0;
   width: 100%;
+  height: 100%;
   display: block;
   cursor: crosshair;
+}
+
+/* ============================================================
+ * 右上角缩放面板
+ * ============================================================ */
+.gtp-zoom-panel {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 6px 4px;
+  background: rgba(45, 51, 64, 0.86);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  user-select: none;
+}
+
+:root[data-theme='light'] .gtp-zoom-panel,
+:root[data-theme='system'][data-resolved-theme='light'] .gtp-zoom-panel {
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.gtp-zrow {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.gtp-zbtn {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: var(--bg-elev);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.gtp-zbtn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.gtp-zbtn.active {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
+/* 垂直滑块：横向写法的 input + writing-mode */
+.gtp-zslider {
+  -webkit-appearance: slider-vertical;
+  appearance: slider-vertical;
+  writing-mode: vertical-lr;       /* Firefox */
+  direction: rtl;
+  width: 16px;
+  height: 110px;
+  margin: 2px 0;
+  background: transparent;
+  cursor: ns-resize;
+}
+.gtp-zslider:focus { outline: none; }
+
+/* WebKit 滑块拇指 */
+.gtp-zslider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 6px;
+  border-radius: 2px;
+  background: var(--accent);
+  border: 1px solid var(--accent-hover);
+  cursor: ns-resize;
+}
+.gtp-zslider::-webkit-slider-runnable-track {
+  width: 2px;
+  background: var(--border-strong);
+  border-radius: 1px;
+}
+/* Firefox 滑块拇指 */
+.gtp-zslider::-moz-range-thumb {
+  width: 14px;
+  height: 6px;
+  border-radius: 2px;
+  background: var(--accent);
+  border: 1px solid var(--accent-hover);
+  cursor: ns-resize;
+}
+.gtp-zslider::-moz-range-track {
+  width: 2px;
+  background: var(--border-strong);
+  border-radius: 1px;
+}
+
+.gtp-zscale {
+  font-size: 10px;
+  color: var(--text-secondary);
+  font-family: Consolas, monospace;
+  font-variant-numeric: tabular-nums;
+  min-width: 44px;
+  text-align: center;
+  padding: 1px 3px;
+  border-top: 1px solid var(--border);
+  margin-top: 2px;
+  padding-top: 3px;
 }

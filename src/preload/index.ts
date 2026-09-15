@@ -8,11 +8,14 @@
 import { contextBridge, ipcRenderer, IpcRendererEvent } from 'electron'
 import {
   GnssMeasType,
+  GnssPosMsg,
+  GnssVelMsg,
   FrameDescriptor,
   SerialConfig
 } from '../shared'
 import {
   CH,
+  AssistantEvent,
   DataEvent,
   FrameInvoke,
   GnssInvoke,
@@ -68,6 +71,12 @@ const labtool: LabtoolAPI = {
   setGnssMeasType(meas: GnssMeasType): Promise<{ ok: boolean }> {
     return ipcRenderer.invoke(GnssInvoke.SetMeasType, { meas })
   },
+  setGnssPosMsg(m: GnssPosMsg): Promise<{ ok: boolean }> {
+    return ipcRenderer.invoke(GnssInvoke.SetPosMsg, { m })
+  },
+  setGnssVelMsg(m: GnssVelMsg): Promise<{ ok: boolean }> {
+    return ipcRenderer.invoke(GnssInvoke.SetVelMsg, { m })
+  },
 
   /* 数据事件 */
   onFrames(cb: (p: FrameParsedPayload) => void): () => void {
@@ -87,11 +96,45 @@ const labtool: LabtoolAPI = {
   },
 
   /* 落盘 */
-  startRecorder(txtPath: string, fieldNames: string[], alignGnss: boolean): Promise<{ ok: boolean; error?: string }> {
-    return ipcRenderer.invoke(RecorderInvoke.Start, { txtPath, fieldNames, alignGnss })
+  startRecorder(args: {
+    baseName: string
+    outDir: string
+    enableGnss: boolean
+    imuChannelBytes: 4 | 8
+    imuFieldCount: number
+    imuFieldNames: string[]
+  }): Promise<{ ok: boolean; state?: RecorderStatePayload; error?: string }> {
+    return ipcRenderer.invoke(RecorderInvoke.Start, args)
   },
-  stopRecorder(): Promise<{ ok: boolean; state: RecorderStatePayload }> {
+  stopRecorder(): Promise<{ ok: boolean }> {
     return ipcRenderer.invoke(RecorderInvoke.Stop)
+  },
+  getRecorderState(): Promise<RecorderStatePayload | null> {
+    return ipcRenderer.invoke(RecorderInvoke.GetState)
+  },
+
+  /* 串口助手 */
+  openAssistant(config: import('../shared').SerialConfig): Promise<{ ok: boolean; error?: string }> {
+    return ipcRenderer.invoke(CH.AssistantOpen, { config })
+  },
+  closeAssistant(): Promise<{ ok: boolean }> {
+    return ipcRenderer.invoke(CH.AssistantClose)
+  },
+  writeAssistant(data: string): Promise<{ ok: boolean; written?: number; error?: string }> {
+    return ipcRenderer.invoke(CH.AssistantWrite, { data })
+  },
+  getAssistantState(): Promise<{ status: import('../shared').SerialStatus; config?: import('../shared').SerialConfig }> {
+    return ipcRenderer.invoke(CH.AssistantGetState)
+  },
+  onAssistantStatus(cb: (p: import('./types').AssistantStatusPayload) => void): () => void {
+    const h = (_: IpcRendererEvent, p: import('./types').AssistantStatusPayload): void => cb(p)
+    ipcRenderer.on(AssistantEvent.Status, h)
+    return () => ipcRenderer.off(AssistantEvent.Status, h)
+  },
+  onAssistantData(cb: (p: import('./types').AssistantDataPayload) => void): () => void {
+    const h = (_: IpcRendererEvent, p: import('./types').AssistantDataPayload): void => cb(p)
+    ipcRenderer.on(AssistantEvent.Data, h)
+    return () => ipcRenderer.off(AssistantEvent.Data, h)
   },
 
   /* 错误 */

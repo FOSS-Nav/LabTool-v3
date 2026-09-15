@@ -14,19 +14,6 @@
 .sb-frame { font-family: 'Consolas', monospace; color: var(--success); }
 .sb-divider { width: 1px; height: 14px; background: var(--border); }
 .sb-spacer { flex: 1; }
-.sb-xmode {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-.sb-xmode select {
-  background: var(--bg-elev);
-  color: var(--text-primary);
-  border: 1px solid var(--border);
-  padding: 2px 4px;
-  border-radius: 2px;
-  font-size: 11px;
-}
 .sb-error {
   color: var(--danger);
   background: rgba(231, 76, 60, 0.1);
@@ -41,14 +28,38 @@
 .sb-error:hover { background: rgba(231, 76, 60, 0.2); }
 
 .sb-recinfo { font-family: 'Consolas', monospace; }
+.sb-recinfo-active {
+  color: var(--text-primary);
+  background: rgba(231, 76, 60, 0.08);
+  border: 1px solid var(--danger);
+  border-radius: 3px;
+  padding: 2px 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 720px;
+  overflow: hidden;
+}
+.sb-rec-paths {
+  font-size: 11px;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sb-rec-counters {
+  color: var(--text-secondary);
+  font-size: 10px;
+}
 .sb-rec-dot {
   display: inline-block;
   width: 8px;
   height: 8px;
   border-radius: 50%;
   background: var(--danger);
-  margin-right: 4px;
+  margin-right: 2px;
   animation: pulse 1.5s infinite;
+  flex-shrink: 0;
 }
 @keyframes pulse {
   0%, 100% { opacity: 1; }

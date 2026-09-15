@@ -93,6 +93,18 @@
 .fe-row-special input,
 .fe-row-special select { color: var(--accent); }
 
+/* 选中行高亮 */
+.fe-table tbody tr {
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.fe-table tbody tr:hover td { background: rgba(74, 158, 255, 0.08); }
+.fe-row-selected td {
+  background: rgba(74, 158, 255, 0.18) !important;
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+.fe-row-selected:hover td { background: rgba(74, 158, 255, 0.22) !important; }
+
 .fe-cell-num { color: var(--text-secondary); font-family: 'Consolas', monospace; }
 
 .fe-input {
@@ -109,7 +121,21 @@
 .fe-input:focus { outline: none; border-color: var(--accent); background: var(--bg-primary); }
 .fe-input:disabled { color: var(--text-secondary); }
 
-.fe-cell-plot input[type="checkbox"] { cursor: pointer; accent-color: var(--accent); }
+.fe-cell-plot {
+  background: rgba(74, 158, 255, 0.04);
+  text-align: center;
+}
+.fe-cell-plot input[type="checkbox"] {
+  cursor: pointer;
+  accent-color: var(--accent);
+  width: 16px;
+  height: 16px;
+  vertical-align: middle;
+}
+.fe-cell-plot input[type="checkbox"]:not(:disabled):hover {
+  transform: scale(1.15);
+  transition: transform 0.1s;
+}
 
 .fe-cell-del .fe-btn-icon {
   width: 22px; height: 22px;
@@ -135,3 +161,14 @@
 }
 .fe-pending { color: var(--warn); }
 .fe-confirmed { color: var(--success); font-weight: 500; }
+
+/* 选中状态指示 */
+.fe-selection-info {
+  font-size: 11px;
+  color: var(--accent);
+  background: rgba(74, 158, 255, 0.1);
+  padding: 2px 8px;
+  border-radius: 3px;
+  font-family: 'Consolas', monospace;
+  font-weight: 500;
+}

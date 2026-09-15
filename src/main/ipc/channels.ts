@@ -19,7 +19,11 @@ export const SerialInvoke = {
   OpenIMU: `${CH.SerialOpen}:imu`,
   OpenGNSS: `${CH.SerialOpen}:gnss`,
   CloseIMU: `${CH.SerialClose}:imu`,
-  CloseGNSS: `${CH.SerialClose}:gnss`
+  CloseGNSS: `${CH.SerialClose}:gnss`,
+  OpenAssistant: CH.AssistantOpen,
+  CloseAssistant: CH.AssistantClose,
+  WriteAssistant: CH.AssistantWrite,
+  GetAssistantState: CH.AssistantGetState
 } as const
 
 /* 协议帧 */
@@ -31,18 +35,25 @@ export const FrameInvoke = {
 
 /* GNSS */
 export const GnssInvoke = {
-  SetMeasType: CH.GnssMeasTypeSet
+  SetMeasType: CH.GnssMeasTypeSet,
+  SetPosMsg: CH.GnssPosMsgSet,
+  SetVelMsg: CH.GnssVelMsgSet
 } as const
 
 /* 落盘 */
 export const RecorderInvoke = {
   Start: CH.RecorderStart,
-  Stop: CH.RecorderStop
+  Stop: CH.RecorderStop,
+  GetState: CH.RecorderGetState
 } as const
 
 /* 事件 */
 export const SerialEvent = {
   StatusChanged: CH.SerialStatusChanged
+} as const
+export const AssistantEvent = {
+  Status: CH.AssistantStatus,
+  Data: CH.AssistantData
 } as const
 export const DataEvent = {
   FrameParsed: CH.FrameParsed,

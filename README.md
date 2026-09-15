@@ -26,6 +26,7 @@
 ✅ 多语言（简体中文 / 繁體中文 / English）
 ✅ HelpDialog 新增"反馈与交流"Tab（含 V3/V2 仓库、邮箱、知乎、官网）
 ✅ localStorage 持久化主题+语言
+✅ 串口助手（AssistantPanel）：第三个独立串口，原始字节透传，HEX/ASCII 双模显示与发送
 ⬜ 串口原生模块编译（需手动跑 electron-rebuild）
 ⬜ 仪表盘（V2 中已注释，未迁移）
 ⬜ 自动 .lastConfig.txt 持久化（V2 中存 Config 目录）

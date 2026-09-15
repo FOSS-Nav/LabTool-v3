@@ -25,7 +25,6 @@ import './styles.css'
 
 function App(): JSX.Element {
   const [panel, setPanel] = useState<PanelKey>('frame')
-  const [xMode, setXMode] = useState<'count' | 'timestamp'>('count')
   const [helpOpen, setHelpOpen] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
 
@@ -62,14 +61,11 @@ function App(): JSX.Element {
         <ToolBox
           panel={panel}
           setPanel={setPanel}
-          xMode={xMode}
           onError={handleError}
         />
       </main>
 
       <StatusBar
-        xMode={xMode}
-        setXMode={setXMode}
         errorMsg={errorMsg}
         onClearError={() => setErrorMsg(null)}
       />

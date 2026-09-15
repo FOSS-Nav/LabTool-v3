@@ -19,11 +19,10 @@ type Tab = 'about' | 'usage' | 'history' | 'feedback'
 
 /* V2 Readme.md 中提取的反馈信息 */
 const FEEDBACK = {
-  repoV3: 'https://gitee.com/tmrnic/lab-tool-v3',
+  repoV3: 'https://foss-nav.github.io/tool-nav/#/labtool-v3',
   repoV2: 'https://gitee.com/tmrnic/lab-tool-v2',
   email: 'yangxiaokang495@163.com',
-  zhihu: 'https://www.zhihu.com/people/qikitaka',
-  website: 'http://www.navspace.tech'
+  zhihu: 'https://www.zhihu.com/people/qikitaka'
 }
 
 export function HelpDialog({ open, onClose }: Props): JSX.Element | null {
@@ -201,21 +200,6 @@ CHKSUM,uint8,0,------`}</pre>
                     rel="noreferrer noopener"
                   >
                     {FEEDBACK.zhihu}
-                  </a>
-                </div>
-
-                <div className="help-feedback-item">
-                  <div className="help-feedback-label">
-                    <span className="help-feedback-icon">🌐</span>
-                    {t('help.feedback.website')}
-                  </div>
-                  <a
-                    className="help-feedback-link"
-                    href={FEEDBACK.website}
-                    target="_blank"
-                    rel="noreferrer noopener"
-                  >
-                    {FEEDBACK.website}
                   </a>
                 </div>
               </div>

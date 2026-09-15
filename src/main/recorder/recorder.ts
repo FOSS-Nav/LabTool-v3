@@ -1,157 +1,251 @@
 /**
  * LabTool-V3 数据落盘
  *
- * 对应 V2 mainwindow.cpp 中：
- *   - txtFile (解析后文本)
- *   - txtFileHex (原始 .bin)
- *   - 头部 %列名 + 每帧一行
- *   - 若 GNSS 串口打开且本帧 GNSS 更新过，把 GNSS 8 维追加到行尾；
- *     否则追加 "0.0 0.0 ..." 占位。
+ * 启动后按基名生成三个文件：
+ *   <base>_IMU_HEX.bin   — IMU 串口原始字节（按字节顺序直接写）
+ *   <base>_GNSS.txt      — GNSS 串口原始 NMEA/NovAtel 文本（按行追加）
+ *   <base>_IMU_GNSS.bin  — 解析后的同步数据：每帧 = [u32 seq][IMU floats][GNSS floats]
  *
- * 设计：写文件是异步的，但每次 append 调用立即把数据 push 到 Buffer，
- *       由 setImmediate 在下一拍写盘；保证 UI 节奏不被打断。
+ *   - 帧序号：IMU 帧序号（u32 LE）
+ *   - IMU floats：与 FrameEditor 解析方案一致，按字段顺序排列（默认 float32 LE）
+ *   - GNSS floats：ve vn vu lat lng alt utc_time（7 × float32 LE）
+ *
+ *   - 若 GNSS 串口未打开：文件改名为 <base>_IMU.bin，仅写 [seq][IMU floats]
+ *   - 若 GNSS 串口打开但暂未收到数据：GNSS 列全部写 0
  */
 
 import { createWriteStream, mkdirSync, WriteStream } from 'node:fs'
-import { dirname } from 'node:path'
-import { ParsedField, ParsedFrame, GnssVec8 } from '../../shared'
-import { precisionFor, SCALE_NONE } from '../../shared/parser/datatype'
+import { dirname, join } from 'node:path'
+import { ParsedFrame, GnssVec8 } from '../../shared'
 
 export interface RecorderOptions {
-  /** txt 路径（不含扩展名也可，函数自动加 .txt 与 .bin） */
-  txtPath: string
-  /** bin 路径；默认 txtPath 去掉 .txt 加 .bin */
-  binPath?: string
-  /** 字段表头（按字段顺序写出 %name） */
-  fieldNames: string[]
-  /** 是否启用 GNSS 时间对齐（追加 8 维） */
-  alignGnss: boolean
+  /** 基名（不含扩展名） */
+  baseName: string
+  /** 保存目录（默认当前工作目录） */
+  outDir?: string
+  /** 是否启用 GNSS 同步（取决于 GNSS 串口是否打开） */
+  enableGnss: boolean
+  /** IMU 字段的字节宽度（4 或 8），从 frame.channelBytes 来 */
+  imuChannelBytes: 4 | 8
+  /** IMU 字段数（不含 Frame_Header / Time_Stamp / Check_Sum） */
+  imuFieldCount: number
+  /** IMU Data 字段名（用于 .txt 表头），按帧格式顺序 */
+  imuFieldNames: string[]
+  /** 标记基名是否带 GNSS（用于决定文件名后缀） */
+  hasGnss: boolean
 }
 
 export interface RecorderState {
   isRecording: boolean
-  txtPath?: string
-  binPath?: string
-  bytesWritten: number
-  linesWritten: number
+  baseName: string
+  outDir: string
+  imuHexPath: string
+  gnssTxtPath: string | null
+  /** 解析后 IMU 的 .bin 文件（带或不带 GNSS 列，文件名由 hasGnss 决定） */
+  parsedBinPath: string
+  /** 解析后 IMU 的 .txt 文件（人类可读） */
+  parsedTxtPath: string
+  /** 累计写入字节 / 帧数 */
+  imuHexBytes: number
+  gnssTxtBytes: number
+  parsedBinFrames: number
+  parsedTxtBytes: number
 }
 
 export class Recorder {
-  private txtStream?: WriteStream
-  private binStream?: WriteStream
+  private imuHexStream?: WriteStream
+  private gnssTxtStream?: WriteStream | null
+  /** 解析后的 IMU 帧的 .bin 流（带或不带 GNSS 列） */
+  private imuBinStream?: WriteStream
+  /** 解析后的 IMU 帧的 .txt 流（带或不带 GNSS 列） */
+  private imuTxtStream?: WriteStream
   private opts?: RecorderOptions
-  private bytesWritten = 0
-  private linesWritten = 0
-  /** 最近一次 GNSS 数据（用于时间对齐：当前 IMU 帧使用上一个更新过的 GNSS） */
+  private imuHexBytes = 0
+  private gnssTxtBytes = 0
+  private imuBinFrames = 0
+  private imuTxtBytes = 0
+  private imuTxtHeaderWritten = false
   private lastGnss: GnssVec8 | null = null
-  /** 本帧是否刚被 GNSS 更新过 */
-  private gnssFresh = false
 
   start(opts: RecorderOptions): void {
-    if (this.txtStream) throw new Error('recorder already started')
-    const binPath = opts.binPath ?? opts.txtPath.replace(/\.txt$/i, '') + '.bin'
-    mkdirSync(dirname(opts.txtPath), { recursive: true })
-    mkdirSync(dirname(binPath), { recursive: true })
-    this.txtStream = createWriteStream(opts.txtPath, { flags: 'w' })
-    this.binStream = createWriteStream(binPath, { flags: 'w' })
-    this.opts = opts
-    this.bytesWritten = 0
-    this.linesWritten = 0
+    if (this.imuHexStream) throw new Error('recorder already started')
 
-    // V2 风格：首行 %name1 %name2 ...
-    const header =
-      opts.fieldNames.map((n) => `%${n}`).join(' ') +
-      (opts.alignGnss ? ' %ve %vn %vu %lat %lng %alt %time %hdop' : '') +
-      '\n'
-    this.txtStream.write(header)
-    this.linesWritten = 1
+    const outDir = opts.outDir ?? process.cwd()
+    mkdirSync(outDir, { recursive: true })
+
+    // 文件路径
+    const imuHexPath = join(outDir, `${opts.baseName}_IMU_HEX.bin`)
+    const imuBinPath = join(outDir, opts.hasGnss ? `${opts.baseName}_IMU_GNSS.bin` : `${opts.baseName}_IMU.bin`)
+    const imuTxtPath = join(outDir, opts.hasGnss ? `${opts.baseName}_IMU_GNSS.txt` : `${opts.baseName}_IMU.txt`)
+    const gnssTxtPath = opts.hasGnss ? join(outDir, `${opts.baseName}_GNSS.txt`) : null
+
+    this.imuHexStream = createWriteStream(imuHexPath, { flags: 'w' })
+    this.imuBinStream = createWriteStream(imuBinPath, { flags: 'w' })
+    this.imuTxtStream = createWriteStream(imuTxtPath, { flags: 'w' })
+    this.gnssTxtStream = gnssTxtPath ? createWriteStream(gnssTxtPath, { flags: 'w' }) : null
+    this.opts = opts
+    this.imuHexBytes = 0
+    this.gnssTxtBytes = 0
+    this.imuBinFrames = 0
+    this.imuTxtBytes = 0
+    this.imuTxtHeaderWritten = false
+    this.lastGnss = null
   }
 
   stop(): void {
-    if (!this.txtStream) return
-    this.txtStream.end()
-    this.binStream?.end()
-    this.txtStream = undefined
-    this.binStream = undefined
+    this.imuHexStream?.end()
+    this.imuBinStream?.end()
+    this.imuTxtStream?.end()
+    this.gnssTxtStream?.end()
+    this.imuHexStream = undefined
+    this.imuBinStream = undefined
+    this.imuTxtStream = undefined
+    this.gnssTxtStream = undefined
     this.opts = undefined
   }
 
-  /** 由 GNSS 串口线程调用，标记"本帧 GNSS 已更新" */
-  markGnssUpdated(vec: GnssVec8): void {
+  /** IMU 串口线程：每个字节到来时调用（原样写入 IMU_HEX.bin） */
+  writeImuRawBytes(data: Buffer): void {
+    if (!this.imuHexStream) return
+    this.imuHexStream.write(data)
+    this.imuHexBytes += data.length
+  }
+
+  /** GNSS 串口线程：每条 NMEA 文本到达时调用 */
+  writeGnssText(line: string): void {
+    if (!this.gnssTxtStream) return
+    const buf = Buffer.from(line + '\r\n')
+    this.gnssTxtStream.write(buf)
+    this.gnssTxtBytes += buf.length
+  }
+
+  /** GNSS 合并向量（用于 IMU_GNSS.bin 同步） */
+  updateLastGnss(vec: GnssVec8): void {
     this.lastGnss = vec
-    this.gnssFresh = true
   }
 
-  /** 由调度器调用：写入一批 IMU 帧 */
-  writeImuBatch(frames: ParsedFrame[]): void {
-    if (!this.txtStream || !this.binStream || !this.opts) return
-    const lines: string[] = []
-    for (const f of frames) {
-      // 落盘 .bin：原始字节
-      this.binStream.write(f.raw)
-      this.bytesWritten += f.raw.length
-
-      // 落盘 .txt：已解析字段
-      const parts: string[] = []
-      for (const field of f.fields) {
-        parts.push(this.formatField(field))
-      }
-      let line = parts.join(' ')
-
-      if (this.opts.alignGnss) {
-        if (this.gnssFresh && this.lastGnss) {
-          line += ' ' + this.formatGnss(this.lastGnss)
-          this.gnssFresh = false
-        } else {
-          line += ' 0 0 0 0 0 0 0 0'
-        }
-      }
-      lines.push(line)
-    }
-    if (lines.length > 0) {
-      this.txtStream.write(lines.join('\n') + '\n')
-      this.linesWritten += lines.length
-    }
+  /** IMU 帧解析完成时调用：写入 .bin 和 .txt */
+  writeImuFrame(frame: ParsedFrame): void {
+    if (!this.imuBinStream || !this.imuTxtStream || !this.opts) return
+    // 1) 写 .bin
+    const buf = this.encodeParsedFrame(frame)
+    this.imuBinStream.write(buf)
+    this.imuBinFrames += 1
+    // 2) 写 .txt（human-readable，列由 opts.imuFieldNames 和 hasGnss 决定）
+    this.writeImuTxtLine(frame)
   }
 
-  state(): RecorderState {
+  state(): RecorderState | null {
+    if (!this.opts || !this.imuHexStream || !this.imuBinStream) return null
+    const outDir = this.opts.outDir ?? process.cwd()
+    const hasGnss = this.opts.hasGnss
+    const base = `${this.opts.baseName}`
     return {
-      isRecording: !!this.txtStream,
-      txtPath: this.opts?.txtPath,
-      binPath: this.opts?.binPath ?? (this.opts ? this.opts.txtPath.replace(/\.txt$/i, '') + '.bin' : undefined),
-      bytesWritten: this.bytesWritten,
-      linesWritten: this.linesWritten
+      isRecording: true,
+      baseName: this.opts.baseName,
+      outDir,
+      imuHexPath: join(outDir, `${base}_IMU_HEX.bin`),
+      gnssTxtPath: hasGnss ? join(outDir, `${base}_GNSS.txt`) : null,
+      parsedBinPath: join(outDir, hasGnss ? `${base}_IMU_GNSS.bin` : `${base}_IMU.bin`),
+      parsedTxtPath: join(outDir, hasGnss ? `${base}_IMU_GNSS.txt` : `${base}_IMU.txt`),
+      imuHexBytes: this.imuHexBytes,
+      gnssTxtBytes: this.gnssTxtBytes,
+      parsedBinFrames: this.imuBinFrames,
+      parsedTxtBytes: this.imuTxtBytes
     }
   }
 
   /* ============================================================
-   * 工具
+   * 内部：写 .txt 文件（人类可读）
+   *   有 GNSS：seq + IMU 字段 + GNSS 7 维
+   *   无 GNSS：seq + IMU 字段
    * ============================================================ */
-
-  private formatField(f: ParsedField): string {
-    // V2：scale > 9999 或 scale == 0 → 不乘
-    if (f.scale === SCALE_NONE || !Number.isFinite(f.scale) || f.scale === 0) {
-      // 直接使用原始 raw 转为字符串：整数直接、浮点用 precision
-      if (Number.isInteger(f.raw)) return String(f.raw)
-      // 估算精度（按 scale 是否是整数判断不靠谱，这里固定 7）
-      return f.raw.toString()
+  private writeImuTxtLine(frame: ParsedFrame): void {
+    const opts = this.opts!
+    if (!this.imuTxtStream) return
+    if (!this.imuTxtHeaderWritten) {
+      const cols = ['seq', ...opts.imuFieldNames]
+      if (opts.hasGnss) cols.push('ve', 'vn', 'vu', 'lat', 'lng', 'alt', 'utc_time')
+      this.imuTxtStream.write(cols.join(' ') + '\n')
+      this.imuTxtHeaderWritten = true
     }
-    // 应用 scale 后输出
-    const v = f.value
-    if (Number.isInteger(v)) return String(v)
+    const parts: string[] = [String(frame.frameIndex)]
+    for (let i = 0; i < opts.imuFieldCount; i++) {
+      const f = frame.fields[i]
+      parts.push(this.formatValue(f ? f.value : NaN))
+    }
+    if (opts.hasGnss) {
+      const g = this.lastGnss
+      if (g) {
+        parts.push(
+          this.formatValue(g.ve ?? 0),
+          this.formatValue(g.vn ?? 0),
+          this.formatValue(g.vu ?? 0),
+          this.formatValue(g.lat ?? 0),
+          this.formatValue(g.lng ?? 0),
+          this.formatValue(g.alt ?? 0),
+          this.formatValue(g.time ?? 0)
+        )
+      } else {
+        for (let i = 0; i < 7; i++) parts.push('0')
+      }
+    }
+    const line = parts.join(' ') + '\n'
+    this.imuTxtStream.write(line)
+    this.imuTxtBytes += Buffer.byteLength(line)
+  }
+
+  private formatValue(v: number): string {
+    if (!Number.isFinite(v)) return 'NaN'
+    if (Number.isInteger(v)) return v.toString()
     return v.toString()
   }
 
-  private formatGnss(g: GnssVec8): string {
-    return [
-      g.ve.toString(),
-      g.vn.toString(),
-      g.vu.toString(),
-      g.lat.toString(),
-      g.lng.toString(),
-      g.alt.toString(),
-      g.time.toString(),
-      g.hdop.toString()
-    ].join(' ')
+  /* ============================================================
+   * 内部：编码 .bin 帧（解析后的 IMU + GNSS）
+   *   [u32 seq][IMU fields × float32/float64][GNSS × 7 float32]
+   *   有 GNSS 时：seq + IMU + 7 个 GNSS float32
+   *   无 GNSS 时：seq + IMU
+   * ============================================================ */
+  private encodeParsedFrame(frame: ParsedFrame): Buffer {
+    const opts = this.opts!
+    const chBytes = opts.imuChannelBytes
+    const imuFieldCount = opts.imuFieldCount
+    const gnssFieldCount = opts.hasGnss ? 7 : 0
+    const totalBytes = 4 + imuFieldCount * chBytes + gnssFieldCount * 4
+    const buf = Buffer.alloc(totalBytes)
+    let off = 0
+    // 帧序号（u32 LE）
+    buf.writeUInt32LE(frame.frameIndex, off); off += 4
+    // IMU 解析数据（应用 scale 后的 value）
+    for (let i = 0; i < imuFieldCount; i++) {
+      const f = frame.fields[i]
+      if (!f) {
+        if (chBytes === 4) buf.writeFloatLE(NaN, off)
+        else buf.writeDoubleLE(NaN, off)
+      } else {
+        if (chBytes === 4) buf.writeFloatLE(f.value, off)
+        else buf.writeDoubleLE(f.value, off)
+      }
+      off += chBytes
+    }
+    // GNSS 数据：ve vn vu lat lng alt time（仅 hasGnss=true 时）
+    if (gnssFieldCount > 0) {
+      const g = this.lastGnss
+      if (g) {
+        buf.writeFloatLE(g.ve ?? 0, off); off += 4
+        buf.writeFloatLE(g.vn ?? 0, off); off += 4
+        buf.writeFloatLE(g.vu ?? 0, off); off += 4
+        buf.writeFloatLE(g.lat ?? 0, off); off += 4
+        buf.writeFloatLE(g.lng ?? 0, off); off += 4
+        buf.writeFloatLE(g.alt ?? 0, off); off += 4
+        buf.writeFloatLE(g.time ?? 0, off); off += 4
+      } else {
+        for (let i = 0; i < 7; i++) {
+          buf.writeFloatLE(0, off); off += 4
+        }
+      }
+    }
+    return buf
   }
 }
