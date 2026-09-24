@@ -247,7 +247,9 @@ export class FrameDecoder {
       const rawVal = readField(view, off, f.type, this.desc.endian)
       off += size
 
-      const useScale = f.scale <= SCALE_NONE && Number.isFinite(f.scale) && f.scale !== 0
+      // SCALE_NONE (9999.99) 表示"不使用标度"，与 V2 中 `scale > 9999.99 不使用` 一致；
+      // 这里必须用严格小于，否则 SCALE_NONE 自身会被当作有效 scale 乘进去（导致 uint8 显示成上万）。
+      const useScale = f.scale < SCALE_NONE && Number.isFinite(f.scale) && f.scale !== 0
       const value = useScale ? rawVal * f.scale : rawVal
 
       if (f.role === 'Time_Stamp') {

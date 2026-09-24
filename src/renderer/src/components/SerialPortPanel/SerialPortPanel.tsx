@@ -10,7 +10,7 @@ import { SerialConfig, SerialStatus } from '@shared'
 import { useT } from '../../i18n'
 import './SerialPortPanel.css'
 
-const BAUDS = ['9600', '19200', '38400', '57600', '115200', '230400', '460800', '921600']
+const BAUDS = ['9600', '19200', '38400', '57600', '115200', '230400', '460800', '614400', '921600']
 const DATA_BITS = ['8', '7', '6', '5']
 const PARITY = [0, 2, 3] as const
 const STOP_BITS = [1, 3, 2] as const

@@ -32,12 +32,12 @@ export enum Endian {
 export const DataTypeName: Record<DataKind, string> = {
   [DataKind.Char]: 'char',
   [DataKind.Uint8]: 'uint8_t',
-  [DataKind.Int16]: 'short',
+  [DataKind.Int16]: 'int16',
   [DataKind.Uint16]: 'uint16_t',
-  [DataKind.Int32]: 'int',
+  [DataKind.Int32]: 'int32',
   [DataKind.Uint32]: 'uint32_t',
-  [DataKind.Float32]: 'float',
-  [DataKind.Float64]: 'double',
+  [DataKind.Float32]: 'float32',
+  [DataKind.Float64]: 'float64',
   [DataKind.ThreeByteInt]: '3bytesToInt',
   [DataKind.TwoByteInt]: '2bytesToInt'
 }
@@ -51,7 +51,14 @@ export function dataKindFromName(name: string): DataKind | null {
   }
   // 兼容 V2 写法 'uint8_t(hex)'
   if (n.startsWith('uint8_t')) return DataKind.Uint8
-  return null
+  // 兼容 V2 旧命名（V3 已统一为 {类型}{位宽}，如 short→int16, int→int32, float→float32, double→float64）
+  switch (n) {
+    case 'short': return DataKind.Int16
+    case 'int': return DataKind.Int32
+    case 'float': return DataKind.Float32
+    case 'double': return DataKind.Float64
+    default: return null
+  }
 }
 
 /* ============================================================

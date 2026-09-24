@@ -100,3 +100,6 @@ temp/
 # build/icon.png 等图标资源要上传，所以不忽略 build/
 # !build/icon.png
 # 注意：默认 gitignore 已经不会忽略整个 build/，但 build/win-unpacked/ 在上面已经显式排除
+
+# ---------- wiki ----------
+wiki/

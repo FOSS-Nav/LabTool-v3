@@ -11,14 +11,16 @@
 ✅ Electron 三进程（main / preload / renderer）
 ✅ React 18 + TypeScript 严格模式 + Vite 工具链
 ✅ 协议帧编辑器（10 种基础类型 / 字节序 / 标度因数 / 帧头/时间戳/校验）
+✅ 显式位宽类型命名（int16 / int32 / uint8_t / uint16_t / float32 / float64）
 ✅ 协议帧状态机解码（流式 / 帧头自恢复 / 跨 chunk 粘包）
-✅ 双路串口（IMU 字节流 + GNSS 文本行流）
+✅ 双路串口（IMU 字节流 + GNSS 文本行流），IMU 波特率最高 921600
 ✅ GNSS 解析（NMEA GPGGA/GPVTG / NovAtel BESTVEL/BESTPOS）
 ✅ GNSS 轨迹（WGS84 → 本地 E/N 投影，3600 点滑动窗口）
 ✅ 三联实时曲线（uPlot）
 ✅ GNSS 散点轨迹（Canvas 2D）
 ✅ 数据落盘：解析 .txt + 原始 .bin + GNSS 时间对齐
-✅ 协议帧配置加载/保存（兼容 V2 CSV 格式）
+✅ 协议帧配置加载/保存（兼容 V2 CSV 格式 + V2 旧类型名 short/int/float/double 自动回退）
+✅ 标度因数默认 9999.99 严格判定（不再误乘 uint8 等无意义标度）
 ✅ 串口 LED 状态、状态栏、错误提示、帮助对话框
 ✅ V2 暗色风格 + 现代布局
 ✅ Zustand 全局 store
@@ -26,7 +28,7 @@
 ✅ 多语言（简体中文 / 繁體中文 / English）
 ✅ HelpDialog 新增"反馈与交流"Tab（含 V3/V2 仓库、邮箱、知乎、官网）
 ✅ localStorage 持久化主题+语言
-✅ 串口助手（AssistantPanel）：第三个独立串口，原始字节透传，HEX/ASCII 双模显示与发送
+✅ 串口助手（AssistantPanel）：第三个独立串口，原始字节透传，HEX/ASCII 双模显示与发送，波特率最高 921600
 ⬜ 串口原生模块编译（需手动跑 electron-rebuild）
 ⬜ 仪表盘（V2 中已注释，未迁移）
 ⬜ 自动 .lastConfig.txt 持久化（V2 中存 Config 目录）
@@ -207,6 +209,34 @@ V2 的 QSerialPort 在主线程，UI 在主线程，跨线程用 signal/slot。
 V3 的安全模型要求 preload 隔离，因此设计为：
   - 渲染端 → main：`invoke` (Promise)
   - main → 渲染端：`webContents.send` + 事件名
+
+## 更新日志
+
+### v3.0.x（最新）
+
+#### 串口助手 & IMU 串口 —— 新增 614400 波特率
+- `SerialPortPanel`（"串口"，IMU 端口）波特率下拉新增 **`614400`**，现可选范围：`9600 / 19200 / 38400 / 57600 / 115200 / 230400 / 460800 / 614400 / 921600`
+- `AssistantPanel`（"串口助手"）波特率下拉同步新增 **`614400`**，现可选范围：`1200 / 2400 / 4800 / 9600 / 19200 / 38400 / 57600 / 115200 / 230400 / 460800 / 614400 / 921600`
+- `GnssPortPanel`（"GNSS"）**未改动** —— 主流 GNSS 接收机最高仍按 115200 配置
+
+#### 数据类型命名统一为 `{类型}{位宽}`
+旧写法 `short` / `int` / `float` / `double` 在 C 语言中位宽因平台而异（`short` 通常 16 位但 C 标准仅保证 ≥16；`int` 可能是 16/32/64 位；`float` 通常 32 位、`double` 通常 64 位但不一定），命名有歧义。改为显式位宽后，协议帧编辑器、CSV 序列化、解析入口三处完全统一：
+
+| `DataKind` | 旧名称 | 新名称 |
+|------------|--------|--------|
+| `Int16`    | `short` | **`int16`**   |
+| `Int32`    | `int`   | **`int32`**   |
+| `Float32`  | `float` | **`float32`** |
+| `Float64`  | `double`| **`float64`** |
+
+- **写入侧**（`frame-config.ts` `dataKindName()` + `types.ts` `DataTypeName`）：只写新名字
+- **读取侧**（`types.ts` `dataKindFromName()`）：新名字优先；遇到 V2 老 `.txt`/`.csv` 配置里的 `short`/`int`/`float`/`double` 自动回退到对应 `DataKind`，**不会**被误降级为 `uint8`
+
+#### 修复 uint8 字段值出现 > 256 的 Bug
+- 现象：协议帧里某个 `uint8` 字段解析出来的值远大于 256（例如 0xFF → ~2550000）
+- 根因：`frame.ts` 中标度因数默认值为 `SCALE_NONE = 9999.99`，原代码用 `<=` 比较，等号命中时把默认标度当成真实标度参与运算：`rawValue = rawVal * 9999.99`，0–255 被放大到 0–~2.55M。**所有数据类型都受影响**，uint8 只是最显眼的那个
+- 修复：`<=` → **`<`**（严格小于），与 V2 "scale > 9999.99 表示不使用" 的语义一致
+- 行为变化：scale 默认值（9999.99）下不再做乘法，输出即原始字节值；与"协议帧编辑器"中没勾选"应用标度因数"时的行为一致
 
 ## 下一步计划
 
