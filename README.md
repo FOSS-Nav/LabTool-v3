@@ -48,10 +48,12 @@
 run.bat               :: 中文主菜单（适合不熟悉命令行的用户）
 start.bat             :: 一键安装 + 启动开发模式
 dev.bat               :: 快速启动开发模式（依赖已装时）
-build.bat             :: 构建生产包（带交互选择 portable/nsis）
+build.bat             :: 构建生产包（带交互选择 portable/nsis，全英文界面）
 install-deps.bat      :: 仅安装依赖 + 重建 serialport 原生模块
 test-parser.bat       :: 运行解析器单元测试
 ```
+
+> ⚠️ **build.bat 是全英文界面**：批处理文件对 UTF-8 中文极不友好——即使脚本内调用了 `chcp 65001`，cmd.exe 仍会按系统默认 codepage（中文 Windows = GBK/CP936）读 BAT 文件，导致中文乱码并破坏 `if ()` 块配对，产生"不是内部或外部命令"报错。改用英文后双击和命令行均稳定。
 
 **首次使用**：双击 `start.bat`，脚本会自动：
 1. 检测 Node.js / npm / MSVC / Python

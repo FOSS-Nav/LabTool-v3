@@ -103,3 +103,8 @@ temp/
 
 # ---------- wiki ----------
 wiki/
+
+# ---------- bat ---------
+build.bat
+dev.bat
+run.bat

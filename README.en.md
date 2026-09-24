@@ -50,10 +50,12 @@
 run.bat               :: Chinese main menu (for users unfamiliar with CLI)
 start.bat             :: One-shot install + start dev mode
 dev.bat               :: Fast-start dev mode (when deps are already installed)
-build.bat             :: Build production package (interactive: portable / nsis)
+build.bat             :: Build production package (interactive: portable / nsis; English UI)
 install-deps.bat      :: Install deps only + rebuild serialport native module
 test-parser.bat       :: Run parser unit tests
 ```
+
+> ⚠️ **build.bat uses an English UI on purpose**: Windows batch files are notoriously fragile with UTF-8 Chinese — even calling `chcp 65001` is not enough, because cmd.exe reads the BAT file using the system default codepage (Chinese Windows = GBK/CP936) before the first line runs, which mangles Chinese characters and breaks `if ()` block pairing, producing "is not recognized as an internal or external command" errors. Switching the menu to English makes double-click and command-line execution equally reliable.
 
 **First run**: double-click `start.bat`. The script will automatically:
 1. Detect Node.js / npm / MSVC / Python
